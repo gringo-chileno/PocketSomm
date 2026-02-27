@@ -299,10 +299,10 @@ struct StatItem: View {
             Text(value)
                 .font(.nyTitle2)
                 .fontWeight(.bold)
-                .foregroundColor(.wineRed)
+                .foregroundColor(.white)
             Text(label)
                 .font(.nyCaption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.7))
         }
     }
 }
@@ -315,15 +315,16 @@ struct StatRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.wineRed)
+                .foregroundColor(.white.opacity(0.7))
                 .frame(width: 20)
             Text(label)
                 .font(.nyCaption)
-                .foregroundColor(.secondary)
+                .foregroundColor(.white.opacity(0.7))
             Spacer()
             Text(value)
                 .font(.nySubheadline)
                 .fontWeight(.medium)
+                .foregroundColor(.white)
         }
     }
 }

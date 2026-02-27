@@ -134,6 +134,7 @@ struct AddWineView: View {
                         dismiss()
                     }
                     .font(.nyBody)
+                    .foregroundColor(.white)
                 }
 
                 ToolbarItem(placement: .topBarTrailing) {
@@ -142,9 +143,11 @@ struct AddWineView: View {
                     }
                     .font(.nyBody)
                     .fontWeight(.semibold)
+                    .foregroundColor(.white)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
+            .interactiveDismissDisabled()
             .onAppear {
                 name = initialName
             }
@@ -165,8 +168,13 @@ struct AddWineView: View {
                 SearchablePickerView(
                     title: "Region",
                     selection: $region,
-                    options: WineCatalog.shared.distinctRegions()
+                    options: country.isEmpty
+                        ? WineCatalog.shared.distinctRegions()
+                        : WineCatalog.shared.distinctRegions(forCountry: country)
                 )
+            }
+            .onChange(of: country) { _, _ in
+                region = ""
             }
         }
     }

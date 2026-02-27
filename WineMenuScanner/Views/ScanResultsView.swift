@@ -93,11 +93,16 @@ struct ScanResultsView: View {
             // Create matches from detected wine names
             var matches: [WineMatch] = []
 
-            for name in scan.detectedWineNames {
+            for entry in scan.detectedWineNames {
+                // Parse variety context if encoded (format: "name\tvariety")
+                let parts = entry.components(separatedBy: ScannerView.varietySeparator)
+                let name = parts[0]
+                let variety = parts.count > 1 ? parts[1] : nil
+
                 var match = WineMatch(detectedName: name)
 
                 // Try to find matching wine in database
-                if let matchedWine = findWineMatch(for: name) {
+                if let matchedWine = findWineMatch(for: name, variety: variety) {
                     match.matchedWine = matchedWine
                     match.predictedScore = preferences.predictScore(for: matchedWine)
                 }
@@ -136,7 +141,7 @@ struct ScanResultsView: View {
         }
     }
 
-    private func findWineMatch(for name: String) -> Wine? {
+    private func findWineMatch(for name: String, variety: String? = nil) -> Wine? {
         // First check if already matched in SwiftData
         if let matched = scan.matchedWines?.first(where: {
             $0.name.localizedCaseInsensitiveContains(name) ||
@@ -146,6 +151,7 @@ struct ScanResultsView: View {
         }
 
         // Check SwiftData for existing wine
+        let cleanedName = name.filter { $0.isLetter || $0.isNumber || $0 == " " }
         let descriptor = FetchDescriptor<Wine>(
             predicate: #Predicate<Wine> { wine in
                 wine.name.localizedStandardContains(name)
@@ -155,21 +161,37 @@ struct ScanResultsView: View {
             return existing
         }
 
-        // Search the catalog
-        let catalogResults = WineCatalog.shared.search(query: name, limit: 1)
+        // Build search query — append variety from menu section header if available
+        let searchQuery = variety != nil ? "\(cleanedName) \(variety!)" : cleanedName
+
+        // Search the catalog with full detected name (+ variety context)
+        let catalogResults = WineCatalog.shared.search(query: searchQuery, limit: 1)
         if let catalogWine = catalogResults.first {
-            // Create SwiftData Wine from catalog
             return createWineFromCatalog(catalogWine)
         }
 
-        // Try searching with individual terms
-        let searchTerms = name.components(separatedBy: .whitespaces)
-            .filter { $0.count >= 3 }
+        // If comma-separated (common menu format: "Winery, Wine Name"),
+        // try searching with parts reordered and separately
+        if name.contains(",") {
+            let parts = name.components(separatedBy: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
 
-        for term in searchTerms {
-            let results = WineCatalog.shared.search(query: term, limit: 1)
-            if let catalogWine = results.first {
-                return createWineFromCatalog(catalogWine)
+            if parts.count >= 2 {
+                // Try "WineName Winery" order (catalog stores wine name first)
+                let reordered = (Array(parts[1...]) + [parts[0]]).joined(separator: " ")
+                let reorderedQuery = variety != nil ? "\(reordered) \(variety!)" : reordered
+                let reorderedResults = WineCatalog.shared.search(query: reorderedQuery, limit: 1)
+                if let catalogWine = reorderedResults.first {
+                    return createWineFromCatalog(catalogWine)
+                }
+
+                // Try just the winery name (before the comma) + variety
+                let wineryQuery = variety != nil ? "\(parts[0]) \(variety!)" : parts[0]
+                let wineryResults = WineCatalog.shared.search(query: wineryQuery, limit: 1)
+                if let catalogWine = wineryResults.first {
+                    return createWineFromCatalog(catalogWine)
+                }
             }
         }
 

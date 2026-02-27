@@ -210,9 +210,13 @@ struct ScannerView: View {
         }
     }
 
+    // Separator used to encode variety context with wine names: "name\tvariety"
+    static let varietySeparator = "\t"
+
     private func extractWineNames(from texts: [String]) -> [String] {
         // Filter and clean up detected texts to find wine names
         var wineNames: [String] = []
+        var currentVariety: String? = nil
 
         // Menu section headers and non-wine items to exclude (Spanish/English)
         let excludedPatterns = [
@@ -243,6 +247,44 @@ struct ScannerView: View {
             /^[A-Z]\s*[\d,\.]+$/   // Single letter + number pattern (currencies)
         ]
 
+        // Grape varieties — used both for section header detection and variety context
+        let grapeVarieties: Set<String> = [
+            "cabernet sauvignon", "cabernet franc", "cabernet", "merlot",
+            "pinot noir", "pinot grigio", "pinot gris", "pinot",
+            "chardonnay", "sauvignon blanc", "sauvignon",
+            "syrah", "shiraz", "riesling", "malbec", "zinfandel",
+            "carmenere", "carménère", "carmenère",
+            "tempranillo", "sangiovese", "garnacha", "grenache",
+            "cinsault", "cinsaut", "mourvèdre", "mourvedre",
+            "pais", "país", "viognier", "gewürztraminer", "gewurztraminer",
+            "semillon", "sémillon", "muscat", "moscatel",
+            "torrontés", "torrontes", "touriga nacional",
+            "carignan", "petit verdot", "petit sirah", "petite sirah",
+            "blanc", "rosé", "rose", "tinto", "blanco", "noir",
+            "red blend", "white blend"
+        ]
+
+        // Common wine regions — skip when standalone
+        let regionNames: Set<String> = [
+            // Chile
+            "cachapoal", "colchagua", "maipo", "casablanca", "aconcagua",
+            "cauquenes", "itata", "curicó", "curico", "rapel", "maule",
+            "san antonio", "leyda", "limarí", "limari", "elqui", "bío-bío",
+            "malleco", "marchigüe", "marchigue", "apalta", "millahue",
+            "maipo andes", "central valley", "millahue cachapoal",
+            // France
+            "bordeaux", "burgundy", "bourgogne", "champagne", "rhône",
+            "alsace", "loire", "provence", "languedoc", "roussillon",
+            // Italy
+            "tuscany", "toscana", "piedmont", "piemonte", "veneto", "sicily",
+            // Spain
+            "rioja", "ribera del duero", "priorat", "galicia", "penedès",
+            // Argentina
+            "mendoza", "salta", "patagonia", "uco valley",
+            // USA
+            "napa valley", "sonoma", "willamette", "paso robles"
+        ]
+
         for text in texts {
             let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
 
@@ -251,13 +293,14 @@ struct ScannerView: View {
 
             let lowercased = trimmed.lowercased()
 
-            // Skip excluded menu section headers
-            if excludedPatterns.contains(where: { lowercased.contains($0) }) {
+            // Check if this is a grape variety section header — track it for context
+            if grapeVarieties.contains(lowercased) {
+                currentVariety = lowercased
                 continue
             }
 
-            // Skip exact matches to section headers
-            if excludedPatterns.contains(lowercased) {
+            // Skip excluded menu section headers
+            if excludedPatterns.contains(where: { lowercased.contains($0) }) {
                 continue
             }
 
@@ -285,27 +328,36 @@ struct ScannerView: View {
                 continue
             }
 
-            // Look for wine-like patterns
-            let wineKeywords = ["château", "chateau", "domaine", "estate", "vineyard", "winery",
-                               "cabernet", "merlot", "pinot", "chardonnay", "sauvignon",
-                               "syrah", "shiraz", "riesling", "malbec", "zinfandel",
-                               "carmenere", "carménère", "tempranillo", "sangiovese",
+            // Skip standalone region names
+            if regionNames.contains(lowercased) {
+                continue
+            }
+
+            // Wine entry indicators (winery/estate terms, NOT grape varieties)
+            let wineEntryKeywords = ["château", "chateau", "domaine", "estate", "vineyard", "winery",
                                "reserve", "reserva", "gran reserva", "grand cru", "premier cru",
-                               "blanc", "noir", "rosé", "rose", "viña", "vina", "bodega", "finca"]
+                               "viña", "vina", "bodega", "finca", "clos", "casa", "quinta"]
 
-            // Check if it contains wine keywords or looks like a wine name (starts with capital, contains year)
-            let hasWineKeyword = wineKeywords.contains { lowercased.contains($0) }
+            let hasWineEntryKeyword = wineEntryKeywords.contains { lowercased.contains($0) }
             let hasYear = trimmed.matches(of: /\b(19|20)\d{2}\b/).count > 0
-            let startsWithCapital = trimmed.first?.isUppercase ?? false
+            let hasComma = trimmed.contains(",")
 
-            if hasWineKeyword || hasYear || (startsWithCapital && trimmed.count >= 8) {
-                wineNames.append(trimmed)
+            // Include if: has a winery/estate keyword, has a vintage year, or
+            // has a comma (common "Winery, Wine" format on menus)
+            if hasWineEntryKeyword || hasYear || hasComma {
+                // Encode variety context if we have it (from section header)
+                if let variety = currentVariety {
+                    wineNames.append(trimmed + ScannerView.varietySeparator + variety)
+                } else {
+                    wineNames.append(trimmed)
+                }
             }
         }
 
-        // Remove duplicates while preserving order
+        // Remove duplicates while preserving order (compare by name part only)
         var seen = Set<String>()
-        return wineNames.filter { name in
+        return wineNames.filter { entry in
+            let name = entry.components(separatedBy: ScannerView.varietySeparator).first ?? entry
             let lowercased = name.lowercased()
             if seen.contains(lowercased) {
                 return false

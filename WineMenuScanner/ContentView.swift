@@ -25,7 +25,10 @@ struct ContentView: View {
                 }
                 .tag(2)
         }
-        .tint(.wineRed)
+        .tint(.white)
+        .onAppear {
+            UITabBar.appearance().tintColor = UIColor(red: 0.45, green: 0.12, blue: 0.16, alpha: 1.0)
+        }
         .preferredColorScheme(settings.colorScheme.colorScheme)
     }
 }

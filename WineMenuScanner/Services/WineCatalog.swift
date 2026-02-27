@@ -78,7 +78,10 @@ class WineCatalog {
         guard !query.isEmpty else { return [] }
 
         var results: [CatalogWine] = []
-        let searchTerms = query.lowercased().components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+        let searchTerms = query.lowercased()
+            .components(separatedBy: .whitespaces)
+            .map { $0.filter { $0.isLetter || $0.isNumber || $0 == " " } }
+            .filter { !$0.isEmpty }
 
         queue.sync {
             // Build WHERE clause for each term
@@ -249,6 +252,35 @@ class WineCatalog {
 
     func distinctRegions(limit: Int = 300) -> [String] {
         return distinctValues(column: "region", limit: limit)
+    }
+
+    func distinctRegions(forCountry country: String, limit: Int = 300) -> [String] {
+        var results: [String] = []
+
+        queue.sync {
+            let sql = """
+                SELECT DISTINCT region
+                FROM wines
+                WHERE country = ? AND region IS NOT NULL AND region != ''
+                ORDER BY region
+                LIMIT ?
+            """
+
+            var statement: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+                sqlite3_bind_text(statement, 1, country, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                sqlite3_bind_int(statement, 2, Int32(limit))
+
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    if let ptr = sqlite3_column_text(statement, 0) {
+                        results.append(String(cString: ptr))
+                    }
+                }
+            }
+            sqlite3_finalize(statement)
+        }
+
+        return results
     }
 
     func distinctWineries(limit: Int = 500) -> [String] {

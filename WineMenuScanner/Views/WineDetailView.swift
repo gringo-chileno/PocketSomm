@@ -45,13 +45,13 @@ struct WineDetailView: View {
                             Button(action: { showingVintagePicker = true }) {
                                 Text(String(vintage))
                                     .font(.nySubheadline)
-                                    .foregroundColor(.wineRed)
+                                    .foregroundColor(.white)
                             }
                         } else {
                             Button(action: { showingVintagePicker = true }) {
                                 Text("Add Vintage")
                                     .font(.nyCaption)
-                                    .foregroundColor(.wineRed)
+                                    .foregroundColor(.white)
                             }
                         }
                     }
@@ -182,7 +182,7 @@ struct WineDetailView: View {
                                     isEditingRating = false
                                 }
                                 .font(.nyCaption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(.white)
                             }
                         }
 
@@ -191,11 +191,11 @@ struct WineDetailView: View {
                             HStack {
                                 Text(String(format: "%.1f", userRatingValue))
                                     .font(.system(size: 48, weight: .bold, design: .rounded))
-                                    .foregroundColor(.wineRed)
+                                    .foregroundColor(.white)
 
                                 Text("/ 5.0")
                                     .font(.nyTitle2)
-                                    .foregroundColor(.secondary)
+                                    .foregroundColor(.white.opacity(0.7))
                             }
 
                             InteractiveStarRating(rating: $userRatingValue)
@@ -259,13 +259,13 @@ struct WineDetailView: View {
                                 Text("Edit")
                             }
                             .font(.nyCaption)
-                            .foregroundColor(.wineRed)
+                            .foregroundColor(.secondary)
                         }
                     }
 
                     EditableDetailRow(icon: "leaf.fill", label: "Varietal", value: wine.grapeVariety, onTap: { showingEditWine = true })
-                    EditableDetailRow(icon: "mappin.circle.fill", label: "Region", value: wine.region, onTap: { showingEditWine = true })
                     EditableDetailRow(icon: "globe", label: "Country", value: wine.country, onTap: { showingEditWine = true })
+                    EditableDetailRow(icon: "mappin.circle.fill", label: "Region", value: wine.region, onTap: { showingEditWine = true })
 
                     if let price = wine.priceUSD {
                         DetailRow(icon: "dollarsign.circle.fill", label: "Price", value: String(format: "$%.0f", price))
@@ -474,7 +474,7 @@ struct DetailRow: View {
     var body: some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.wineRed)
+                .foregroundColor(.secondary)
                 .frame(width: 24)
 
             Text(label)
@@ -498,7 +498,7 @@ struct EditableDetailRow: View {
         Button(action: onTap) {
             HStack {
                 Image(systemName: icon)
-                    .foregroundColor(.wineRed)
+                    .foregroundColor(.secondary)
                     .frame(width: 24)
 
                 Text(label)
@@ -512,7 +512,7 @@ struct EditableDetailRow: View {
                         .foregroundColor(.primary)
                 } else {
                     Text("Add")
-                        .foregroundColor(.wineRed)
+                        .foregroundColor(.secondary)
                 }
             }
         }
@@ -545,11 +545,11 @@ struct EditWineView: View {
                     SelectableRow(label: "Grape Varietal", value: grapeVariety) {
                         showingVarietyPicker = true
                     }
-                    SelectableRow(label: "Region", value: region) {
-                        showingRegionPicker = true
-                    }
                     SelectableRow(label: "Country", value: country) {
                         showingCountryPicker = true
+                    }
+                    SelectableRow(label: "Region", value: region) {
+                        showingRegionPicker = true
                     }
                     SelectableRow(label: "Winery", value: winery) {
                         showingWineryPicker = true
@@ -560,6 +560,7 @@ struct EditWineView: View {
                         }
                     }
                     .font(.nyBody)
+                    .tint(.secondary)
                 } header: {
                     Text("Wine Info")
                         .font(.nyCaption)
@@ -573,6 +574,7 @@ struct EditWineView: View {
                         dismiss()
                     }
                     .font(.nyBody)
+                    .foregroundColor(.white)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button("Save") {
@@ -581,6 +583,7 @@ struct EditWineView: View {
                     }
                     .font(.nyBody)
                     .fontWeight(.semibold)
+                    .foregroundColor(.white)
                 }
             }
             .onAppear {
@@ -597,7 +600,9 @@ struct EditWineView: View {
                 SearchablePickerView(
                     title: "Region",
                     selection: $region,
-                    options: WineCatalog.shared.distinctRegions()
+                    options: country.isEmpty
+                        ? WineCatalog.shared.distinctRegions()
+                        : WineCatalog.shared.distinctRegions(forCountry: country)
                 )
             }
             .sheet(isPresented: $showingCountryPicker) {
@@ -606,6 +611,9 @@ struct EditWineView: View {
                     selection: $country,
                     options: WineCatalog.shared.distinctCountries()
                 )
+            }
+            .onChange(of: country) { _, _ in
+                region = ""
             }
             .sheet(isPresented: $showingWineryPicker) {
                 SearchablePickerView(
@@ -642,7 +650,7 @@ struct SelectableRow: View {
                 Spacer()
                 Text(value.isEmpty ? "Select" : value)
                     .font(.nyBody)
-                    .foregroundColor(value.isEmpty ? .wineRed : .secondary)
+                    .foregroundColor(.secondary)
                 Image(systemName: "chevron.right")
                     .font(.nyCaption)
                     .foregroundColor(.secondary)
