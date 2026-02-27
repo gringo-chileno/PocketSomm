@@ -31,29 +31,10 @@ struct WineDetailView: View {
                         .font(.nyTitle2)
                         .fontWeight(.bold)
 
-                    HStack(spacing: 8) {
-                        if let winery = wine.winery {
-                            Text(winery)
-                                .font(.nySubheadline)
-                                .foregroundColor(.secondary)
-                        }
-
-                        // Vintage (editable, updates immediately)
-                        if let vintage = editedVintage ?? wine.vintage, vintage > 0 {
-                            Text("•")
-                                .foregroundColor(.secondary)
-                            Button(action: { showingVintagePicker = true }) {
-                                Text(String(vintage))
-                                    .font(.nySubheadline)
-                                    .foregroundColor(.white)
-                            }
-                        } else {
-                            Button(action: { showingVintagePicker = true }) {
-                                Text("Add Vintage")
-                                    .font(.nyCaption)
-                                    .foregroundColor(.white)
-                            }
-                        }
+                    if let winery = wine.winery {
+                        Text(winery)
+                            .font(.nySubheadline)
+                            .foregroundColor(.secondary)
                     }
 
                     // Wine type badge
@@ -260,6 +241,27 @@ struct WineDetailView: View {
                             }
                             .font(.nyCaption)
                             .foregroundColor(.secondary)
+                        }
+                    }
+
+                    // Vintage
+                    Button(action: { showingVintagePicker = true }) {
+                        HStack {
+                            Image(systemName: "calendar")
+                                .foregroundColor(.secondary)
+                                .frame(width: 24)
+                            Text("Vintage")
+                                .font(.nyBody)
+                                .foregroundColor(.primary)
+                            Spacer()
+                            if let vintage = editedVintage ?? wine.vintage, vintage > 0 {
+                                Text(String(vintage))
+                                    .font(.nyBody)
+                                    .foregroundColor(.primary)
+                            } else {
+                                Text("Add")
+                                    .foregroundColor(.secondary)
+                            }
                         }
                     }
 
@@ -522,6 +524,7 @@ struct EditableDetailRow: View {
 struct EditWineView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query private var allRatings: [UserRating]
 
     let wine: Wine
 
@@ -537,6 +540,24 @@ struct EditWineView: View {
     @State private var showingWineryPicker = false
 
     private let wineTypeOptions = ["", "Red", "White", "Rosé", "Sparkling", "Dessert", "Fortified"]
+
+    private var frequentCountries: [String] {
+        let values = allRatings.compactMap { $0.wine?.country }
+        return topValues(from: values)
+    }
+
+    private var frequentRegions: [String] {
+        let values = allRatings.compactMap { $0.wine?.region }
+        return topValues(from: values)
+    }
+
+    private func topValues(from values: [String], limit: Int = 5) -> [String] {
+        var counts: [String: Int] = [:]
+        for v in values where !v.isEmpty {
+            counts[v, default: 0] += 1
+        }
+        return counts.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
+    }
 
     var body: some View {
         NavigationStack {
@@ -602,14 +623,16 @@ struct EditWineView: View {
                     selection: $region,
                     options: country.isEmpty
                         ? WineCatalog.shared.distinctRegions()
-                        : WineCatalog.shared.distinctRegions(forCountry: country)
+                        : WineCatalog.shared.distinctRegions(forCountry: country),
+                    frequentOptions: frequentRegions
                 )
             }
             .sheet(isPresented: $showingCountryPicker) {
                 SearchablePickerView(
                     title: "Country",
                     selection: $country,
-                    options: WineCatalog.shared.distinctCountries()
+                    options: WineCatalog.shared.distinctCountries(),
+                    frequentOptions: frequentCountries
                 )
             }
             .onChange(of: country) { _, _ in
@@ -666,6 +689,7 @@ struct VarietalPickerView: View {
     @State private var searchText = ""
 
     private let commonVarietals = [
+        "Blend",
         "Cabernet Sauvignon",
         "Merlot",
         "Pinot Noir",
@@ -797,6 +821,7 @@ struct SearchablePickerView: View {
     let title: String
     @Binding var selection: String
     let options: [String]
+    var frequentOptions: [String] = []
 
     @State private var searchText = ""
 
@@ -805,6 +830,13 @@ struct SearchablePickerView: View {
             return options
         }
         return options.filter { $0.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    private var filteredFrequent: [String] {
+        if searchText.isEmpty {
+            return frequentOptions
+        }
+        return frequentOptions.filter { $0.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
@@ -827,21 +859,54 @@ struct SearchablePickerView: View {
                     }
                 }
 
-                ForEach(filteredOptions, id: \.self) { option in
-                    Button(action: {
-                        selection = option
-                        dismiss()
-                    }) {
-                        HStack {
-                            Text(option)
-                                .font(.nyBody)
-                                .foregroundColor(.primary)
-                            Spacer()
-                            if selection == option {
-                                Image(systemName: "checkmark")
-                                    .foregroundColor(.wineRed)
+                // Frequently used section
+                if !filteredFrequent.isEmpty {
+                    Section {
+                        ForEach(filteredFrequent, id: \.self) { option in
+                            Button(action: {
+                                selection = option
+                                dismiss()
+                            }) {
+                                HStack {
+                                    Text(option)
+                                        .font(.nyBody)
+                                        .foregroundColor(.primary)
+                                    Spacer()
+                                    if selection == option {
+                                        Image(systemName: "checkmark")
+                                            .foregroundColor(.wineRed)
+                                    }
+                                }
                             }
                         }
+                    } header: {
+                        Text("Frequently Used")
+                            .font(.nyCaption)
+                    }
+                }
+
+                Section {
+                    ForEach(filteredOptions, id: \.self) { option in
+                        Button(action: {
+                            selection = option
+                            dismiss()
+                        }) {
+                            HStack {
+                                Text(option)
+                                    .font(.nyBody)
+                                    .foregroundColor(.primary)
+                                Spacer()
+                                if selection == option {
+                                    Image(systemName: "checkmark")
+                                        .foregroundColor(.wineRed)
+                                }
+                            }
+                        }
+                    }
+                } header: {
+                    if !filteredFrequent.isEmpty {
+                        Text("All \(title)")
+                            .font(.nyCaption)
                     }
                 }
             }

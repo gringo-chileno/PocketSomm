@@ -4,8 +4,10 @@ import SwiftData
 struct AddWineView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
+    @Query private var allRatings: [UserRating]
 
     let initialName: String
+    let initialWinery: String
     var onWineCreated: ((Wine) -> Void)?
 
     @State private var name: String = ""
@@ -24,9 +26,28 @@ struct AddWineView: View {
 
     private let wineTypeOptions = ["Red", "White", "Rosé", "Sparkling", "Dessert", "Fortified"]
 
-    init(initialName: String = "", onWineCreated: ((Wine) -> Void)? = nil) {
+    init(initialName: String = "", initialWinery: String = "", onWineCreated: ((Wine) -> Void)? = nil) {
         self.initialName = initialName
+        self.initialWinery = initialWinery
         self.onWineCreated = onWineCreated
+    }
+
+    private var frequentCountries: [String] {
+        let wines = allRatings.compactMap { $0.wine?.country }
+        return topValues(from: wines)
+    }
+
+    private var frequentRegions: [String] {
+        let wines = allRatings.compactMap { $0.wine?.region }
+        return topValues(from: wines)
+    }
+
+    private func topValues(from values: [String], limit: Int = 5) -> [String] {
+        var counts: [String: Int] = [:]
+        for v in values where !v.isEmpty {
+            counts[v, default: 0] += 1
+        }
+        return counts.sorted { $0.value > $1.value }.prefix(limit).map { $0.key }
     }
 
     var body: some View {
@@ -150,6 +171,7 @@ struct AddWineView: View {
             .interactiveDismissDisabled()
             .onAppear {
                 name = initialName
+                winery = initialWinery
             }
             .sheet(isPresented: $showingVintagePicker) {
                 AddWineVintagePicker(selectedVintage: $vintage)
@@ -161,7 +183,8 @@ struct AddWineView: View {
                 SearchablePickerView(
                     title: "Country",
                     selection: $country,
-                    options: WineCatalog.shared.distinctCountries()
+                    options: WineCatalog.shared.distinctCountries(),
+                    frequentOptions: frequentCountries
                 )
             }
             .sheet(isPresented: $showingRegionPicker) {
@@ -170,7 +193,8 @@ struct AddWineView: View {
                     selection: $region,
                     options: country.isEmpty
                         ? WineCatalog.shared.distinctRegions()
-                        : WineCatalog.shared.distinctRegions(forCountry: country)
+                        : WineCatalog.shared.distinctRegions(forCountry: country),
+                    frequentOptions: frequentRegions
                 )
             }
             .onChange(of: country) { _, _ in

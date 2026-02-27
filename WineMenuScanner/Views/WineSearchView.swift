@@ -78,7 +78,7 @@ struct WineSearchView: View {
                     pendingWine = nil
                 }
             }) {
-                AddWineView(initialName: searchText) { wine in
+                AddWineView(initialWinery: searchText) { wine in
                     pendingWine = wine
                 }
             }
