@@ -15,6 +15,7 @@ struct WineDetailView: View {
     @State private var showingVintagePicker = false
     @State private var showingRatingHistory = false
     @State private var isEditingRating = false
+    @State private var isNewRating = false
     @State private var showingEditWine = false
     @State private var showingDeleteConfirmation = false
 
@@ -37,16 +38,7 @@ struct WineDetailView: View {
                             .foregroundColor(.secondary)
                     }
 
-                    // Wine type badge
-                    if let wineType = wine.wineType {
-                        Text(wineType)
-                            .font(.nyCaption)
-                            .padding(.horizontal, 8)
-                            .padding(.vertical, 4)
-                            .background(Color.wineRed.opacity(0.15))
-                            .foregroundColor(.wineRed)
-                            .cornerRadius(4)
-                    }
+                    // Wine type shown in details section instead
                 }
 
                 // Your Rating Section - show existing or allow new
@@ -63,14 +55,10 @@ struct WineDetailView: View {
                                 Button(action: { showingRatingHistory = true }) {
                                     HStack(spacing: 4) {
                                         Image(systemName: "clock.arrow.circlepath")
-                                        Text("\(ratings.count)")
+                                        Text("See all \(ratings.count) ratings")
                                     }
-                                    .font(.nyCaption)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 4)
-                                    .background(Color.wineRed.opacity(0.2))
-                                    .foregroundColor(.wineRed)
-                                    .cornerRadius(4)
+                                    .font(.nySubheadline)
+                                    .foregroundColor(.white)
                                 }
                             }
                         }
@@ -98,6 +86,7 @@ struct WineDetailView: View {
                             Button(action: {
                                 userRatingValue = rating.rating
                                 notes = rating.notes ?? ""
+                                isNewRating = false
                                 isEditingRating = true
                             }) {
                                 HStack {
@@ -116,6 +105,7 @@ struct WineDetailView: View {
                             Button(action: {
                                 userRatingValue = 0
                                 notes = ""
+                                isNewRating = true
                                 isEditingRating = true
                             }) {
                                 HStack {
@@ -212,7 +202,7 @@ struct WineDetailView: View {
 
                         // Save button inline
                         Button(action: { saveRating() }) {
-                            Text(existingRating != nil && userRatingValue == existingRating?.rating ? "Update Rating" : "Save Rating")
+                            Text(existingRating != nil && !isNewRating ? "Update Rating" : "Save Rating")
                                 .font(.nyHeadline)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 14)
@@ -370,20 +360,26 @@ struct WineDetailView: View {
     }
 
     private func saveRating() {
-        // Always create a new rating (supports multiple tastings)
-        let newRating = UserRating(
-            wine: wine,
-            rating: userRatingValue,
-            notes: notes.isEmpty ? nil : notes,
-            vintage: editedVintage ?? wine.vintage
-        )
-        modelContext.insert(newRating)
+        if !isNewRating, let existing = existingRating {
+            // Update the existing rating in place
+            existing.rating = userRatingValue
+            existing.notes = notes.isEmpty ? nil : notes
+            existing.vintage = editedVintage ?? wine.vintage
+        } else {
+            // Create a new rating (new tasting)
+            let newRating = UserRating(
+                wine: wine,
+                rating: userRatingValue,
+                notes: notes.isEmpty ? nil : notes,
+                vintage: editedVintage ?? wine.vintage
+            )
+            modelContext.insert(newRating)
 
-        // Ensure the relationship is set up
-        if wine.userRatings == nil {
-            wine.userRatings = []
+            if wine.userRatings == nil {
+                wine.userRatings = []
+            }
+            wine.userRatings?.append(newRating)
         }
-        wine.userRatings?.append(newRating)
 
         // Explicitly save
         do {
