@@ -1,6 +1,8 @@
 # WineMenuScanner
 
-An iOS app that scans wine menus and provides information about the wines listed.
+An iOS app that lets you rate wines. Then you can scan the wine menu in a restaurant and it will make recommendations based on your preferences and community ratings.
+
+I called it Pocket Somm, but that name is already being used by other apps. So I'd have to change it if I ever pick this project up again.
 
 ## Features
 
