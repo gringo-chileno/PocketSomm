@@ -72,24 +72,39 @@ class WineCatalog {
         }
 
         print("Wine catalog opened: \(totalWines) wines")
+
+        // Register custom UNACCENT function for accent-insensitive search
+        sqlite3_create_function(db, "UNACCENT", 1, SQLITE_UTF8, nil, { context, argc, argv in
+            guard let value = sqlite3_value_text(argv![0]) else {
+                sqlite3_result_null(context)
+                return
+            }
+            let str = String(cString: value)
+            let folded = str.folding(options: .diacriticInsensitive, locale: .current)
+            folded.withCString { cStr in
+                sqlite3_result_text(context, cStr, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+            }
+        }, nil, nil)
     }
 
     func search(query: String, limit: Int = 50) -> [CatalogWine] {
         guard !query.isEmpty else { return [] }
 
         var results: [CatalogWine] = []
-        let searchTerms = query.lowercased()
+        // Strip diacritics and punctuation from search terms
+        let searchTerms = query.folding(options: .diacriticInsensitive, locale: .current)
+            .lowercased()
             .components(separatedBy: .whitespaces)
             .map { $0.filter { $0.isLetter || $0.isNumber || $0 == " " } }
             .filter { !$0.isEmpty }
 
         queue.sync {
-            // Build WHERE clause for each term
+            // Build WHERE clause using UNACCENT for accent-insensitive matching
             var conditions: [String] = []
             var params: [String] = []
 
             for term in searchTerms {
-                conditions.append("(LOWER(name) LIKE ? OR LOWER(winery) LIKE ? OR LOWER(variety) LIKE ? OR LOWER(region) LIKE ? OR LOWER(country) LIKE ?)")
+                conditions.append("(LOWER(UNACCENT(name)) LIKE ? OR LOWER(UNACCENT(winery)) LIKE ? OR LOWER(UNACCENT(variety)) LIKE ? OR LOWER(UNACCENT(region)) LIKE ? OR LOWER(UNACCENT(country)) LIKE ?)")
                 let likeTerm = "%\(term)%"
                 params.append(contentsOf: [likeTerm, likeTerm, likeTerm, likeTerm, likeTerm])
             }
@@ -281,6 +296,31 @@ class WineCatalog {
         }
 
         return results
+    }
+
+    /// Quick check if text matches a known winery name in the catalog (accent-insensitive)
+    func isKnownWinery(_ name: String) -> Bool {
+        var found = false
+        let folded = name.folding(options: .diacriticInsensitive, locale: .current).lowercased()
+
+        queue.sync {
+            let sql = """
+                SELECT 1 FROM wines
+                WHERE LOWER(UNACCENT(winery)) = ?
+                LIMIT 1
+            """
+
+            var statement: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+                sqlite3_bind_text(statement, 1, folded, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
+                if sqlite3_step(statement) == SQLITE_ROW {
+                    found = true
+                }
+            }
+            sqlite3_finalize(statement)
+        }
+
+        return found
     }
 
     func distinctWineries(limit: Int = 500) -> [String] {

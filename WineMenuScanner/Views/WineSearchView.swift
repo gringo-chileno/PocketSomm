@@ -113,11 +113,12 @@ struct WineSearchView: View {
     }
 
     private func findOrCreateWine(from catalog: CatalogWine) -> Wine {
-        // Check if wine already exists in SwiftData
+        // Check if wine already exists in SwiftData (match by name AND winery)
         let name = catalog.name
+        let wineryName = catalog.winery ?? ""
         let descriptor = FetchDescriptor<Wine>(
             predicate: #Predicate<Wine> { wine in
-                wine.name == name
+                wine.name == name && wine.winery == wineryName
             }
         )
 

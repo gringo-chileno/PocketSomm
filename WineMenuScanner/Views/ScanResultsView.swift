@@ -199,11 +199,12 @@ struct ScanResultsView: View {
     }
 
     private func createWineFromCatalog(_ catalog: CatalogWine) -> Wine {
-        // Check if already exists
+        // Check if already exists (match by name AND winery)
         let name = catalog.name
+        let wineryName = catalog.winery ?? ""
         let descriptor = FetchDescriptor<Wine>(
             predicate: #Predicate<Wine> { wine in
-                wine.name == name
+                wine.name == name && wine.winery == wineryName
             }
         )
         if let existing = try? modelContext.fetch(descriptor).first {

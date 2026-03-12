@@ -341,10 +341,14 @@ struct ScannerView: View {
             let hasWineEntryKeyword = wineEntryKeywords.contains { lowercased.contains($0) }
             let hasYear = trimmed.matches(of: /\b(19|20)\d{2}\b/).count > 0
             let hasComma = trimmed.contains(",")
+            // Check if standalone text matches a known winery in the catalog
+            let isKnownWinery = !hasWineEntryKeyword && !hasYear && !hasComma
+                ? WineCatalog.shared.isKnownWinery(trimmed)
+                : false
 
-            // Include if: has a winery/estate keyword, has a vintage year, or
-            // has a comma (common "Winery, Wine" format on menus)
-            if hasWineEntryKeyword || hasYear || hasComma {
+            // Include if: has a winery/estate keyword, has a vintage year,
+            // has a comma (common "Winery, Wine" format), or matches a known winery
+            if hasWineEntryKeyword || hasYear || hasComma || isKnownWinery {
                 // Encode variety context if we have it (from section header)
                 if let variety = currentVariety {
                     wineNames.append(trimmed + ScannerView.varietySeparator + variety)
