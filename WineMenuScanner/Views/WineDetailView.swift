@@ -18,6 +18,7 @@ struct WineDetailView: View {
     @State private var isNewRating = false
     @State private var showingEditWine = false
     @State private var showingDeleteConfirmation = false
+    @State private var isLoadingVivino = false
 
     private var existingRating: UserRating? {
         wine.userRatings?.sorted { $0.dateRated > $1.dateRated }.first
@@ -267,12 +268,49 @@ struct WineDetailView: View {
                 .background(Color(.secondarySystemBackground))
                 .cornerRadius(12)
 
-                // Community Rating
+                // Community Rating (Vivino)
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("Community Rating")
-                        .font(.nyHeadline)
+                    HStack {
+                        Text("Community Rating")
+                            .font(.nyHeadline)
+                        Spacer()
+                        if isLoadingVivino {
+                            ProgressView()
+                                .scaleEffect(0.8)
+                        }
+                    }
 
-                    if let avgRating = wine.averageRating {
+                    if let vivinoRating = wine.vivinoRating, vivinoRating > 0 {
+                        HStack {
+                            StarRatingView(rating: vivinoRating, size: 20)
+
+                            Text(String(format: "%.1f", vivinoRating))
+                                .font(.nyTitle2)
+                                .fontWeight(.semibold)
+
+                            Text("/ 5.0")
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let count = wine.vivinoRatingsCount, count > 0 {
+                            Text("\(count.formatted()) Vivino ratings")
+                                .font(.nyCaption)
+                                .foregroundColor(.secondary)
+                        }
+
+                        if let urlString = wine.vivinoURL,
+                           let url = URL(string: urlString) {
+                            Link(destination: url) {
+                                HStack(spacing: 4) {
+                                    Text("View on Vivino")
+                                    Image(systemName: "arrow.up.right")
+                                }
+                                .font(.nyCaption)
+                                .foregroundColor(.wineRed)
+                            }
+                        }
+                    } else if let avgRating = wine.averageRating {
+                        // Fallback to catalog rating
                         HStack {
                             StarRatingView(rating: avgRating, size: 20)
 
@@ -283,7 +321,11 @@ struct WineDetailView: View {
                             Text("/ 5.0")
                                 .foregroundColor(.secondary)
                         }
-                    } else {
+
+                        Text("Catalog rating")
+                            .font(.nyCaption)
+                            .foregroundColor(.secondary)
+                    } else if !isLoadingVivino {
                         Text("—")
                             .font(.nyTitle2)
                             .foregroundColor(.secondary)
@@ -300,6 +342,12 @@ struct WineDetailView: View {
         .onAppear {
             // Initialize vintage from wine's default
             editedVintage = wine.vintage
+        }
+        .task {
+            // Fetch Vivino rating in background if we don't have one cached
+            if wine.vivinoRating == nil {
+                await fetchVivinoRating()
+            }
         }
         .overlay {
             if showingSaveConfirmation {
@@ -357,6 +405,33 @@ struct WineDetailView: View {
             .replacingOccurrences(of: "'", with: "")
         let items = cleaned.components(separatedBy: ", ").filter { !$0.isEmpty }
         return items.isEmpty ? nil : items
+    }
+
+    private func fetchVivinoRating() async {
+        // Build search query from wine name + winery
+        var query = wine.name
+        if let winery = wine.winery, !winery.isEmpty {
+            query = "\(winery) \(query)"
+        }
+
+        isLoadingVivino = true
+        let results = await VivinoService.shared.search(query: query, limit: 3)
+        isLoadingVivino = false
+
+        // Find best match — prefer exact winery match
+        let match = results.first { result in
+            guard let winery = wine.winery else { return true }
+            return result.winery.localizedCaseInsensitiveContains(winery)
+                || winery.localizedCaseInsensitiveContains(result.winery)
+        } ?? results.first
+
+        if let match = match {
+            wine.vivinoRating = match.rating
+            wine.vivinoRatingsCount = match.ratingsCount
+            wine.vivinoURL = match.vivinoURL
+            wine.vivinoImageURL = match.imageURL
+            try? modelContext.save()
+        }
     }
 
     private func saveRating() {
@@ -686,17 +761,27 @@ struct VarietalPickerView: View {
 
     private let commonVarietals = [
         "Blend",
+        // Reds
         "Cabernet Sauvignon",
+        "Cabernet Franc",
         "Merlot",
         "Pinot Noir",
         "Syrah",
         "Shiraz",
         "Malbec",
         "Carmenere",
+        "Carignan",
+        "País",
+        "Cinsault",
         "Tempranillo",
         "Sangiovese",
+        "Nebbiolo",
         "Zinfandel",
         "Grenache",
+        "Mourvèdre",
+        "Petit Verdot",
+        "Petite Sirah",
+        // Whites
         "Chardonnay",
         "Sauvignon Blanc",
         "Pinot Grigio",
@@ -704,7 +789,12 @@ struct VarietalPickerView: View {
         "Moscato",
         "Gewürztraminer",
         "Viognier",
+        "Sémillon",
         "Chenin Blanc",
+        "Torrontés",
+        "Grüner Veltliner",
+        "Marsanne",
+        "Verdejo",
         "Albariño"
     ]
 

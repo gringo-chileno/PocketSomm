@@ -7,7 +7,10 @@ struct WineSearchView: View {
 
     @State private var searchText = ""
     @State private var catalogResults: [CatalogWine] = []
+    @State private var userWineResults: [Wine] = []
+    @State private var vivinoResults: [VivinoWine] = []
     @State private var isSearching = false
+    @State private var isSearchingVivino = false
     @State private var shouldDismiss = false
     @State private var showingAddWine = false
     @State private var selectedWine: Wine?
@@ -21,17 +24,68 @@ struct WineSearchView: View {
                 } else if isSearching {
                     ProgressView("Searching...")
                         .frame(maxHeight: .infinity)
-                } else if catalogResults.isEmpty {
+                } else if catalogResults.isEmpty && userWineResults.isEmpty && vivinoResults.isEmpty && !isSearchingVivino {
                     NoResultsView(searchText: searchText, onAddWine: {
                         showingAddWine = true
                     })
                 } else {
                     List {
-                        ForEach(catalogResults) { catalogWine in
-                            Button {
-                                selectWine(catalogWine)
-                            } label: {
-                                CatalogWineRowView(wine: catalogWine, modelContext: modelContext)
+                        // User's saved wines (manually added, from scans, etc.)
+                        if !userWineResults.isEmpty {
+                            Section {
+                                ForEach(userWineResults) { wine in
+                                    Button {
+                                        selectedWine = wine
+                                    } label: {
+                                        UserWineRowView(wine: wine)
+                                    }
+                                }
+                            } header: {
+                                Text("Your Wines")
+                                    .font(.nyCaption)
+                            }
+                        }
+
+                        if !catalogResults.isEmpty {
+                            Section {
+                                ForEach(catalogResults) { catalogWine in
+                                    Button {
+                                        selectWine(catalogWine)
+                                    } label: {
+                                        CatalogWineRowView(wine: catalogWine, modelContext: modelContext)
+                                    }
+                                }
+                            } header: {
+                                if !userWineResults.isEmpty {
+                                    Text("From Catalog")
+                                        .font(.nyCaption)
+                                }
+                            }
+                        }
+
+                        // Vivino results section
+                        if !vivinoResults.isEmpty {
+                            Section {
+                                ForEach(vivinoResults, id: \.name) { vivinoWine in
+                                    Button {
+                                        selectVivinoWine(vivinoWine)
+                                    } label: {
+                                        VivinoWineRowView(wine: vivinoWine)
+                                    }
+                                }
+                            } header: {
+                                Text("From Vivino")
+                                    .font(.nyCaption)
+                            }
+                        } else if isSearchingVivino {
+                            Section {
+                                HStack {
+                                    ProgressView()
+                                        .scaleEffect(0.8)
+                                    Text("Searching Vivino...")
+                                        .font(.nyCaption)
+                                        .foregroundColor(.secondary)
+                                }
                             }
                         }
 
@@ -91,6 +145,8 @@ struct WineSearchView: View {
     private func performSearch(query: String) {
         guard !query.isEmpty else {
             catalogResults = []
+            userWineResults = []
+            vivinoResults = []
             return
         }
 
@@ -102,8 +158,47 @@ struct WineSearchView: View {
 
             // Search the SQLite catalog (instant!)
             catalogResults = WineCatalog.shared.search(query: query, limit: 50)
+
+            // Also search user's SwiftData wines (manually added, from scans, from Vivino)
+            let descriptor = FetchDescriptor<Wine>(
+                predicate: #Predicate<Wine> { wine in
+                    wine.name.localizedStandardContains(query) ||
+                    (wine.winery ?? "").localizedStandardContains(query) ||
+                    (wine.grapeVariety ?? "").localizedStandardContains(query) ||
+                    (wine.region ?? "").localizedStandardContains(query)
+                }
+            )
+            userWineResults = (try? modelContext.fetch(descriptor)) ?? []
+
             isSearching = false
+
+            // Also search Vivino in the background
+            let currentQuery = query
+            Task {
+                isSearchingVivino = true
+                let results = await VivinoService.shared.search(query: currentQuery, limit: 5)
+                guard currentQuery == searchText else { return }
+                vivinoResults = results
+                isSearchingVivino = false
+            }
         }
+    }
+
+    private func selectVivinoWine(_ vivinoWine: VivinoWine) {
+        // Create a Wine from Vivino data
+        let wine = Wine(
+            name: vivinoWine.name,
+            winery: vivinoWine.winery,
+            region: vivinoWine.region,
+            country: vivinoWine.country,
+            vivinoRating: vivinoWine.rating,
+            vivinoRatingsCount: vivinoWine.ratingsCount,
+            vivinoURL: vivinoWine.vivinoURL,
+            vivinoImageURL: vivinoWine.imageURL
+        )
+        modelContext.insert(wine)
+        try? modelContext.save()
+        selectedWine = wine
     }
 
     private func selectWine(_ catalogWine: CatalogWine) {
@@ -277,6 +372,116 @@ struct NoResultsView: View {
             }
         }
         .frame(maxHeight: .infinity)
+    }
+}
+
+struct UserWineRowView: View {
+    let wine: Wine
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack {
+                Text(wine.name)
+                    .font(.nyHeadline)
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                if let ratings = wine.userRatings, !ratings.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "checkmark")
+                            .fontWeight(.bold)
+                        Text("Rated")
+                    }
+                    .font(.nyCaption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Color.green)
+                    .cornerRadius(4)
+                }
+            }
+
+            HStack {
+                if let winery = wine.winery, !winery.isEmpty {
+                    Text(winery)
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                }
+                if let variety = wine.grapeVariety, !variety.isEmpty {
+                    if wine.winery != nil {
+                        Text("•")
+                            .foregroundColor(.secondary)
+                    }
+                    Text(variety)
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if let vivinoRating = wine.vivinoRating, vivinoRating > 0 {
+                HStack {
+                    StarRatingView(rating: vivinoRating, size: 12)
+                    Text(String(format: "%.1f", vivinoRating))
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                    Text("Vivino")
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                }
+            } else if let avgRating = wine.averageRating {
+                HStack {
+                    StarRatingView(rating: avgRating, size: 12)
+                    Text(String(format: "%.1f", avgRating))
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
+    }
+}
+
+struct VivinoWineRowView: View {
+    let wine: VivinoWine
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(wine.winery.isEmpty ? wine.name : "\(wine.name)")
+                .font(.nyHeadline)
+                .foregroundColor(.primary)
+
+            HStack {
+                if !wine.winery.isEmpty {
+                    Text(wine.winery)
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                }
+                if let variety = wine.variety {
+                    if !wine.winery.isEmpty {
+                        Text("•")
+                            .foregroundColor(.secondary)
+                    }
+                    Text(variety)
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                }
+            }
+
+            if wine.rating > 0 {
+                HStack {
+                    StarRatingView(rating: wine.rating, size: 12)
+                    Text(String(format: "%.1f", wine.rating))
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                    Text("(\(wine.ratingsCount.formatted()))")
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
+                }
+            }
+        }
+        .padding(.vertical, 4)
     }
 }
 

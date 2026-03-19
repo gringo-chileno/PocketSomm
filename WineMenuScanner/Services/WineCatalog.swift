@@ -41,6 +41,8 @@ class WineCatalog {
 
     private var db: OpaquePointer?
     private let queue = DispatchQueue(label: "wine.catalog.queue", attributes: .concurrent)
+    // Cached set of known winery names (lowercased, accent-folded) for O(1) lookup
+    private var knownWineries: Set<String> = []
 
     var totalWines: Int {
         var count = 0
@@ -85,6 +87,28 @@ class WineCatalog {
                 sqlite3_result_text(context, cStr, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
             }
         }, nil, nil)
+
+        // Build cached set of known wineries for fast O(1) lookup
+        buildWineryCache()
+    }
+
+    private func buildWineryCache() {
+        queue.sync {
+            let sql = "SELECT DISTINCT winery FROM wines WHERE winery IS NOT NULL AND winery != ''"
+            var statement: OpaquePointer?
+            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
+                while sqlite3_step(statement) == SQLITE_ROW {
+                    if let ptr = sqlite3_column_text(statement, 0) {
+                        let name = String(cString: ptr)
+                            .folding(options: .diacriticInsensitive, locale: .current)
+                            .lowercased()
+                        knownWineries.insert(name)
+                    }
+                }
+            }
+            sqlite3_finalize(statement)
+        }
+        print("Cached \(knownWineries.count) distinct wineries")
     }
 
     func search(query: String, limit: Int = 50) -> [CatalogWine] {
@@ -300,27 +324,8 @@ class WineCatalog {
 
     /// Quick check if text matches a known winery name in the catalog (accent-insensitive)
     func isKnownWinery(_ name: String) -> Bool {
-        var found = false
         let folded = name.folding(options: .diacriticInsensitive, locale: .current).lowercased()
-
-        queue.sync {
-            let sql = """
-                SELECT 1 FROM wines
-                WHERE LOWER(UNACCENT(winery)) = ?
-                LIMIT 1
-            """
-
-            var statement: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
-                sqlite3_bind_text(statement, 1, folded, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-                if sqlite3_step(statement) == SQLITE_ROW {
-                    found = true
-                }
-            }
-            sqlite3_finalize(statement)
-        }
-
-        return found
+        return knownWineries.contains(folded)
     }
 
     func distinctWineries(limit: Int = 500) -> [String] {

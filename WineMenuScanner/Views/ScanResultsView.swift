@@ -138,6 +138,35 @@ struct ScanResultsView: View {
                 wineMatches = matches
                 isLoading = false
             }
+
+            // Fire off Vivino lookups for unmatched wines in background
+            let unmatchedIndices = matches.enumerated()
+                .filter { $0.element.matchedWine == nil }
+                .map { ($0.offset, $0.element.detectedName) }
+
+            for (index, detectedName) in unmatchedIndices {
+                let results = await VivinoService.shared.search(query: detectedName, limit: 1)
+                if let vivinoWine = results.first {
+                    let wine = Wine(
+                        name: vivinoWine.name,
+                        winery: vivinoWine.winery,
+                        region: vivinoWine.region,
+                        country: vivinoWine.country,
+                        vivinoRating: vivinoWine.rating,
+                        vivinoRatingsCount: vivinoWine.ratingsCount,
+                        vivinoURL: vivinoWine.vivinoURL,
+                        vivinoImageURL: vivinoWine.imageURL
+                    )
+                    await MainActor.run {
+                        modelContext.insert(wine)
+                        try? modelContext.save()
+                        if index < wineMatches.count {
+                            wineMatches[index].matchedWine = wine
+                            wineMatches[index].predictedScore = preferences.predictScore(for: wine)
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -170,27 +199,64 @@ struct ScanResultsView: View {
             return createWineFromCatalog(catalogWine)
         }
 
-        // If comma-separated (common menu format: "Winery, Wine Name"),
-        // try searching with parts reordered and separately
+        // If comma-separated, handle two menu formats:
+        // Format A: "Winery, Wine Name" (e.g., "Vik, A")
+        // Format B: "Variety, Winery Details, Region" (e.g., "Pinot Noir, Montes Outer Limits, Zapallar")
         if name.contains(",") {
             let parts = name.components(separatedBy: ",")
                 .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
                 .filter { !$0.isEmpty }
 
             if parts.count >= 2 {
-                // Try "WineName Winery" order (catalog stores wine name first)
-                let reordered = (Array(parts[1...]) + [parts[0]]).joined(separator: " ")
-                let reorderedQuery = variety != nil ? "\(reordered) \(variety!)" : reordered
-                let reorderedResults = WineCatalog.shared.search(query: reorderedQuery, limit: 1)
-                if let catalogWine = reorderedResults.first {
-                    return createWineFromCatalog(catalogWine)
-                }
+                let grapeVarieties: Set<String> = [
+                    "cabernet sauvignon", "cabernet franc", "cabernet", "merlot",
+                    "pinot noir", "pinot grigio", "pinot gris", "pinot",
+                    "chardonnay", "sauvignon blanc", "sauvignon",
+                    "syrah", "shiraz", "riesling", "malbec", "zinfandel",
+                    "carmenere", "carménère", "tempranillo", "sangiovese",
+                    "garnacha", "grenache", "cinsault", "mourvèdre",
+                    "pais", "país", "viognier", "gewürztraminer",
+                    "semillon", "sémillon", "muscat", "moscatel",
+                    "torrontés", "carignan", "petit verdot", "petite sirah",
+                    "nebbiolo", "red blend", "white blend", "ensamblaje"
+                ]
 
-                // Try just the winery name (before the comma) + variety
-                let wineryQuery = variety != nil ? "\(parts[0]) \(variety!)" : parts[0]
-                let wineryResults = WineCatalog.shared.search(query: wineryQuery, limit: 1)
-                if let catalogWine = wineryResults.first {
-                    return createWineFromCatalog(catalogWine)
+                let firstPartLower = parts[0].lowercased()
+                let firstPartIsVariety = grapeVarieties.contains(firstPartLower)
+
+                if firstPartIsVariety {
+                    // Format B: "Variety, Winery/Wine, Region"
+                    // Search with remaining parts + variety name
+                    let wineryAndRegion = Array(parts[1...]).joined(separator: " ")
+                    let queryWithVariety = "\(wineryAndRegion) \(parts[0])"
+                    let results = WineCatalog.shared.search(query: queryWithVariety, limit: 1)
+                    if let catalogWine = results.first {
+                        return createWineFromCatalog(catalogWine)
+                    }
+
+                    // Try just the winery part (second segment) + variety
+                    if parts.count >= 3 {
+                        let wineryOnly = "\(parts[1]) \(parts[0])"
+                        let wineryResults = WineCatalog.shared.search(query: wineryOnly, limit: 1)
+                        if let catalogWine = wineryResults.first {
+                            return createWineFromCatalog(catalogWine)
+                        }
+                    }
+                } else {
+                    // Format A: "Winery, Wine Name"
+                    let reordered = (Array(parts[1...]) + [parts[0]]).joined(separator: " ")
+                    let reorderedQuery = variety != nil ? "\(reordered) \(variety!)" : reordered
+                    let reorderedResults = WineCatalog.shared.search(query: reorderedQuery, limit: 1)
+                    if let catalogWine = reorderedResults.first {
+                        return createWineFromCatalog(catalogWine)
+                    }
+
+                    // Try just the winery name (before the comma) + variety
+                    let wineryQuery = variety != nil ? "\(parts[0]) \(variety!)" : parts[0]
+                    let wineryResults = WineCatalog.shared.search(query: wineryQuery, limit: 1)
+                    if let catalogWine = wineryResults.first {
+                        return createWineFromCatalog(catalogWine)
+                    }
                 }
             }
         }
@@ -346,93 +412,100 @@ struct WineMatchCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            // Detected Name
-            Text(match.detectedName)
-                .font(.nyHeadline)
-
             if let wine = match.matchedWine {
-                // Matched wine info - winery then varietal
-                HStack {
-                    if let winery = wine.winery {
-                        Text(winery)
-                            .font(.nyCaption)
-                            .foregroundColor(.secondary)
-                    }
-                    if let variety = wine.grapeVariety {
-                        if wine.winery != nil {
-                            Text("•")
-                                .foregroundColor(.secondary)
-                        }
-                        Text(variety)
-                            .font(.nyCaption)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                HStack(spacing: 16) {
-                    // Show user's rating if they've rated it, otherwise show predicted
-                    if let userRating = wine.userRating {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Your Rating")
-                                .font(.nyCaption2)
-                                .foregroundColor(.secondary)
-                            HStack(spacing: 4) {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .foregroundColor(.wineRed)
-                                    .font(.nyCaption)
-                                Text(String(format: "%.1f", userRating.rating))
-                                    .font(.nyBody)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                    } else if let predicted = match.predictedScore {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Predicted")
-                                .font(.nyCaption2)
-                                .foregroundColor(.secondary)
-                            HStack(spacing: 4) {
-                                Image(systemName: "heart.fill")
-                                    .foregroundColor(.wineRed)
-                                    .font(.nyCaption)
-                                Text(String(format: "%.1f", predicted))
-                                    .font(.nyBody)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                    }
-
-                    // Community Rating
-                    if let avgRating = wine.averageRating {
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("Community")
-                                .font(.nyCaption2)
-                                .foregroundColor(.secondary)
-                            HStack(spacing: 4) {
-                                Image(systemName: "star.fill")
-                                    .foregroundColor(.wineRed)
-                                    .font(.nyCaption)
-                                Text(String(format: "%.1f", avgRating))
-                                    .font(.nyBody)
-                                    .fontWeight(.semibold)
-                            }
-                        }
-                    }
-
-                    Spacer()
-                }
-
                 NavigationLink(destination: WineDetailView(wine: wine, onRatingSaved: onRatingSaved)) {
-                    Text(wine.userRating != nil ? "View Details" : "View & Rate")
-                        .font(.nySubheadline)
-                        .fontWeight(.semibold)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(Color(.secondarySystemBackground))
-                        .foregroundColor(.primary)
-                        .cornerRadius(8)
+                    VStack(alignment: .leading, spacing: 10) {
+                        // Detected Name
+                        Text(match.detectedName)
+                            .font(.nyHeadline)
+                            .foregroundColor(.primary)
+
+                        // Matched wine info - winery then varietal
+                        HStack {
+                            if let winery = wine.winery {
+                                Text(winery)
+                                    .font(.nyCaption)
+                                    .foregroundColor(.secondary)
+                            }
+                            if let variety = wine.grapeVariety {
+                                if wine.winery != nil {
+                                    Text("•")
+                                        .foregroundColor(.secondary)
+                                }
+                                Text(variety)
+                                    .font(.nyCaption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+
+                        HStack(spacing: 16) {
+                            // Show user's rating if they've rated it, otherwise show predicted
+                            if let userRating = wine.userRating {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Your Rating")
+                                        .font(.nyCaption2)
+                                        .foregroundColor(.secondary)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "checkmark.circle.fill")
+                                            .foregroundColor(.wineRed)
+                                            .font(.nyCaption)
+                                        Text(String(format: "%.1f", userRating.rating))
+                                            .font(.nyBody)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                            } else if let predicted = match.predictedScore {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Predicted")
+                                        .font(.nyCaption2)
+                                        .foregroundColor(.secondary)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "heart.fill")
+                                            .foregroundColor(.wineRed)
+                                            .font(.nyCaption)
+                                        Text(String(format: "%.1f", predicted))
+                                            .font(.nyBody)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                            }
+
+                            // Community Rating
+                            if let avgRating = wine.averageRating {
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text("Community")
+                                        .font(.nyCaption2)
+                                        .foregroundColor(.secondary)
+                                    HStack(spacing: 4) {
+                                        Image(systemName: "star.fill")
+                                            .foregroundColor(.wineRed)
+                                            .font(.nyCaption)
+                                        Text(String(format: "%.1f", avgRating))
+                                            .font(.nyBody)
+                                            .fontWeight(.semibold)
+                                    }
+                                }
+                            }
+
+                            Spacer()
+                        }
+
+                        Text(wine.userRating != nil ? "View Details" : "View & Rate")
+                            .font(.nySubheadline)
+                            .fontWeight(.semibold)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(Color(.secondarySystemBackground))
+                            .foregroundColor(.primary)
+                            .cornerRadius(8)
+                    }
                 }
+                .buttonStyle(.plain)
             } else {
                 // No match found
+                Text(match.detectedName)
+                    .font(.nyHeadline)
+
                 HStack {
                     Image(systemName: "questionmark.circle")
                         .foregroundColor(.orange)

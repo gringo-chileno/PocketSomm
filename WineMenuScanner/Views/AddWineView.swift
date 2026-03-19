@@ -10,13 +10,23 @@ struct AddWineView: View {
     let initialWinery: String
     var onWineCreated: ((Wine) -> Void)?
 
-    @State private var name: String = ""
-    @State private var winery: String = ""
-    @State private var grapeVariety: String = ""
-    @State private var region: String = ""
-    @State private var country: String = ""
-    @State private var wineType: String = "Red"
-    @State private var vintage: Int?
+    // SceneStorage persists form values when the app is backgrounded
+    @SceneStorage("addWine_name") private var name: String = ""
+    @SceneStorage("addWine_winery") private var winery: String = ""
+    @SceneStorage("addWine_grapeVariety") private var grapeVariety: String = ""
+    @SceneStorage("addWine_region") private var region: String = ""
+    @SceneStorage("addWine_country") private var country: String = ""
+    @SceneStorage("addWine_wineType") private var wineType: String = "Red"
+    @SceneStorage("addWine_vintage") private var vintageString: String = ""
+
+    private var vintage: Int? { Int(vintageString) }
+
+    private var vintageBinding: Binding<Int?> {
+        Binding(
+            get: { Int(vintageString) },
+            set: { vintageString = $0.map(String.init) ?? "" }
+        )
+    }
 
     // Picker states
     @State private var showingVintagePicker = false
@@ -152,6 +162,7 @@ struct AddWineView: View {
             .toolbar {
                 ToolbarItem(placement: .topBarLeading) {
                     Button("Cancel") {
+                        clearFormStorage()
                         dismiss()
                     }
                     .font(.nyBody)
@@ -170,11 +181,14 @@ struct AddWineView: View {
             }
             .interactiveDismissDisabled()
             .onAppear {
-                name = initialName
-                winery = initialWinery
+                // Only apply initial values if form is empty (fresh open, not restored from background)
+                if name.isEmpty && winery.isEmpty {
+                    name = initialName
+                    winery = initialWinery
+                }
             }
             .sheet(isPresented: $showingVintagePicker) {
-                AddWineVintagePicker(selectedVintage: $vintage)
+                AddWineVintagePicker(selectedVintage: vintageBinding)
             }
             .sheet(isPresented: $showingVarietyPicker) {
                 VarietalPickerView(selection: $grapeVariety)
@@ -203,6 +217,16 @@ struct AddWineView: View {
         }
     }
 
+    private func clearFormStorage() {
+        name = ""
+        winery = ""
+        grapeVariety = ""
+        region = ""
+        country = ""
+        wineType = "Red"
+        vintageString = ""
+    }
+
     private func saveWine() {
         let trimmedName = name.trimmingCharacters(in: .whitespaces)
         guard !trimmedName.isEmpty else { return }
@@ -226,6 +250,7 @@ struct AddWineView: View {
 
         do {
             try modelContext.save()
+            clearFormStorage()
             onWineCreated?(wine)
             dismiss()
         } catch {

@@ -16,6 +16,12 @@ final class Wine {
     var acidity: String?  // Low, Medium, High
     var foodPairings: String?  // JSON array of food pairings
 
+    // Vivino community data (fetched async)
+    var vivinoRating: Double?
+    var vivinoRatingsCount: Int?
+    var vivinoURL: String?
+    var vivinoImageURL: String?
+
     // Inverse relationship
     @Relationship(deleteRule: .cascade, inverse: \UserRating.wine)
     var userRatings: [UserRating]?
@@ -32,7 +38,11 @@ final class Wine {
         wineType: String? = nil,
         body: String? = nil,
         acidity: String? = nil,
-        foodPairings: String? = nil
+        foodPairings: String? = nil,
+        vivinoRating: Double? = nil,
+        vivinoRatingsCount: Int? = nil,
+        vivinoURL: String? = nil,
+        vivinoImageURL: String? = nil
     ) {
         self.name = name
         self.vintage = vintage
@@ -46,6 +56,10 @@ final class Wine {
         self.body = body
         self.acidity = acidity
         self.foodPairings = foodPairings
+        self.vivinoRating = vivinoRating
+        self.vivinoRatingsCount = vivinoRatingsCount
+        self.vivinoURL = vivinoURL
+        self.vivinoImageURL = vivinoImageURL
     }
 
     var displayName: String {
