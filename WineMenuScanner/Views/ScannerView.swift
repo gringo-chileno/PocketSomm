@@ -199,7 +199,21 @@ struct ScannerView: View {
             request.recognitionLevel = .accurate
             request.usesLanguageCorrection = true
 
-            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+            // Convert UIImage orientation to CGImagePropertyOrientation so
+            // Vision correctly handles rotated/sideways photos
+            let cgOrientation: CGImagePropertyOrientation
+            switch image.imageOrientation {
+            case .up: cgOrientation = .up
+            case .down: cgOrientation = .down
+            case .left: cgOrientation = .left
+            case .right: cgOrientation = .right
+            case .upMirrored: cgOrientation = .upMirrored
+            case .downMirrored: cgOrientation = .downMirrored
+            case .leftMirrored: cgOrientation = .leftMirrored
+            case .rightMirrored: cgOrientation = .rightMirrored
+            @unknown default: cgOrientation = .up
+            }
+            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: cgOrientation, options: [:])
 
             do {
                 try handler.perform([request])
@@ -224,6 +238,7 @@ struct ScannerView: View {
             "otros tintos", "otros blancos", "medias botellas", "por copa", "tintos por copa",
             "blancos por copa", "vinos tintos", "vinos blancos", "espumantes", "postres",
             "carta de vinos", "nuestra selección", "selección de", "media botella",
+            "copas", "burbujas", "botellas", "reservas",
             // English menu terms
             "by the glass", "red wines", "white wines", "sparkling wines", "dessert wines",
             "wine list", "our selection", "half bottle", "bottle", "glass",
@@ -286,7 +301,17 @@ struct ScannerView: View {
         ]
 
         for text in texts {
-            let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+            var trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // Strip trailing price info (e.g. "| $5.500", "| $28,500", "$50.00")
+            // before evaluating — many menus append prices inline
+            if let pipeRange = trimmed.range(of: #"\s*\|\s*\$[\d,\.]+\s*$"#, options: .regularExpression) {
+                trimmed = String(trimmed[trimmed.startIndex..<pipeRange.lowerBound])
+                    .trimmingCharacters(in: .whitespaces)
+            } else if let dollarRange = trimmed.range(of: #"\s*\$[\d,\.]+\s*$"#, options: .regularExpression) {
+                trimmed = String(trimmed[trimmed.startIndex..<dollarRange.lowerBound])
+                    .trimmingCharacters(in: .whitespaces)
+            }
 
             // Skip very short or very long strings
             guard trimmed.count >= 4 && trimmed.count <= 100 else { continue }
@@ -314,8 +339,10 @@ struct ScannerView: View {
             }
             if isPrice { continue }
 
-            // Skip strings that contain $ anywhere
-            if trimmed.contains("$") { continue }
+            // Skip strings that are entirely a price (after stripping above, this catches standalone prices)
+            if trimmed.contains("$") && trimmed.allSatisfy({ $0 == "$" || $0.isNumber || $0 == "," || $0 == "." || $0.isWhitespace }) {
+                continue
+            }
 
             // Skip strings that are just numbers/punctuation
             if trimmed.allSatisfy({ $0.isNumber || $0.isWhitespace || $0 == "," || $0 == "." }) {
