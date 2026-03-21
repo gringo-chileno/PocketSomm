@@ -7,6 +7,7 @@ struct SettingsView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var showingVivinoImport = false
     @State private var showingResetConfirmation = false
+    @State private var showingFeedback = false
 
     var body: some View {
         NavigationStack {
@@ -63,6 +64,27 @@ struct SettingsView: View {
                     }
                 } header: {
                     Text("Data")
+                        .font(.nyCaption)
+                }
+
+                // Feedback Section
+                Section {
+                    Button(action: { showingFeedback = true }) {
+                        HStack {
+                            Image(systemName: "envelope")
+                                .foregroundColor(.wineRed)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Send Feedback")
+                                    .font(.nyBody)
+                                    .foregroundColor(.primary)
+                                Text("Report a bug or request a feature")
+                                    .font(.nyCaption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                } header: {
+                    Text("Feedback")
                         .font(.nyCaption)
                 }
 
@@ -136,6 +158,9 @@ struct SettingsView: View {
             }
             .sheet(isPresented: $showingVivinoImport) {
                 VivinoImportView()
+            }
+            .sheet(isPresented: $showingFeedback) {
+                FeedbackView()
             }
         }
     }
