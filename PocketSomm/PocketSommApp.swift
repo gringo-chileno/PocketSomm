@@ -2,7 +2,7 @@ import SwiftUI
 import SwiftData
 
 @main
-struct WineMenuScannerApp: App {
+struct PocketSommApp: App {
     let sharedModelContainer: ModelContainer
 
     init() {

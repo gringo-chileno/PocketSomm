@@ -1,8 +1,6 @@
-# WineMenuScanner
+# Pocket Somm
 
 An iOS app that lets you rate wines. Then you can scan the wine menu in a restaurant and it will make recommendations based on your preferences and community ratings.
-
-I called it Pocket Somm, but that name is already being used by other apps. So I'd have to change it if I ever pick this project up again.
 
 ## Features
 
@@ -21,9 +19,9 @@ I called it Pocket Somm, but that name is already being used by other apps. So I
 
 1. Clone the repo
    ```
-   git clone https://github.com/gringo-chileno/WineMenuScanner.git
+   git clone https://github.com/gringo-chileno/PocketSomm.git
    ```
-2. Open `WineMenuScanner.xcodeproj` in Xcode
+2. Open `PocketSomm.xcodeproj` in Xcode
 3. Build and run on a device (camera required for scanning)
 
 ## Tech Stack

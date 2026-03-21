@@ -3,7 +3,7 @@ import Foundation
 struct GitHubService {
     private static let token = Secrets.githubPAT
     private static let owner = "gringo-chileno"
-    private static let repo = "WineMenuScanner"
+    private static let repo = "PocketSomm"
 
     static var isConfigured: Bool {
         !token.isEmpty

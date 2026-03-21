@@ -7,7 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		A1000001000000000000001 /* WineMenuScannerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000000000001 /* WineMenuScannerApp.swift */; };
+		A1000001000000000000001 /* PocketSommApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000001000000000000001 /* PocketSommApp.swift */; };
 		A1000002000000000000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000002000000000000002 /* ContentView.swift */; };
 		A1000003000000000000003 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = B1000003000000000000003 /* Assets.xcassets */; };
 		A1000004000000000000004 /* Wine.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000004000000000000004 /* Wine.swift */; };
@@ -39,7 +39,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		B1000001000000000000001 /* WineMenuScannerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WineMenuScannerApp.swift; sourceTree = "<group>"; };
+		B1000001000000000000001 /* PocketSommApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PocketSommApp.swift; sourceTree = "<group>"; };
 		B1000002000000000000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B1000003000000000000003 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		B1000004000000000000004 /* Wine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Wine.swift; sourceTree = "<group>"; };
@@ -59,7 +59,7 @@
 		B1000012000000000000012 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		B1000013000000000000013 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		B1000014000000000000014 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
-		C1000001000000000000001 /* WineMenuScanner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WineMenuScanner.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1000001000000000000001 /* PocketSomm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PocketSomm.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF25C5E42F6B7CB80031D317 /* VivinoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoService.swift; sourceTree = "<group>"; };
 		DF3EF3622F2E47D600340A2D /* VivinoImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoImportView.swift; sourceTree = "<group>"; };
 		DF3EF3662F2E4E5B00340A2D /* VivinoImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoImportView.swift; sourceTree = "<group>"; };
@@ -98,15 +98,15 @@
 				DFD4B6B82F6F1616001A84B1 /* FeedbackView.swift */,
 				DFD4B6BA2F6F1623001A84B1 /* GitHubService.swift */,
 				DFD4B6B62F6F14FC001A84B1 /* Secrets.swift */,
-				E1000002000000000000002 /* WineMenuScanner */,
+				E1000002000000000000002 /* PocketSomm */,
 				E1000003000000000000003 /* Products */,
 			);
 			sourceTree = "<group>";
 		};
-		E1000002000000000000002 /* WineMenuScanner */ = {
+		E1000002000000000000002 /* PocketSomm */ = {
 			isa = PBXGroup;
 			children = (
-				B1000001000000000000001 /* WineMenuScannerApp.swift */,
+				B1000001000000000000001 /* PocketSommApp.swift */,
 				B1000002000000000000002 /* ContentView.swift */,
 				B1000012000000000000012 /* Theme.swift */,
 				E1000004000000000000004 /* Models */,
@@ -116,13 +116,13 @@
 				B1000003000000000000003 /* Assets.xcassets */,
 				B1000011000000000000011 /* Info.plist */,
 			);
-			path = WineMenuScanner;
+			path = PocketSomm;
 			sourceTree = "<group>";
 		};
 		E1000003000000000000003 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				C1000001000000000000001 /* WineMenuScanner.app */,
+				C1000001000000000000001 /* PocketSomm.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -181,9 +181,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		F1000001000000000000001 /* WineMenuScanner */ = {
+		F1000001000000000000001 /* PocketSomm */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = G1000003000000000000003 /* Build configuration list for PBXNativeTarget "WineMenuScanner" */;
+			buildConfigurationList = G1000003000000000000003 /* Build configuration list for PBXNativeTarget "PocketSomm" */;
 			buildPhases = (
 				D1000002000000000000002 /* Sources */,
 				D1000001000000000000001 /* Frameworks */,
@@ -193,9 +193,9 @@
 			);
 			dependencies = (
 			);
-			name = WineMenuScanner;
-			productName = WineMenuScanner;
-			productReference = C1000001000000000000001 /* WineMenuScanner.app */;
+			name = PocketSomm;
+			productName = PocketSomm;
+			productReference = C1000001000000000000001 /* PocketSomm.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -213,7 +213,7 @@
 					};
 				};
 			};
-			buildConfigurationList = G1000001000000000000001 /* Build configuration list for PBXProject "WineMenuScanner" */;
+			buildConfigurationList = G1000001000000000000001 /* Build configuration list for PBXProject "PocketSomm" */;
 			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
@@ -226,7 +226,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				F1000001000000000000001 /* WineMenuScanner */,
+				F1000001000000000000001 /* PocketSomm */,
 			);
 		};
 /* End PBXProject section */
@@ -249,7 +249,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				A1000001000000000000001 /* WineMenuScannerApp.swift in Sources */,
+				A1000001000000000000001 /* PocketSommApp.swift in Sources */,
 				DFD4B6B72F6F14FC001A84B1 /* Secrets.swift in Sources */,
 				A1000002000000000000002 /* ContentView.swift in Sources */,
 				A1000004000000000000004 /* Wine.swift in Sources */,
@@ -413,9 +413,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = WineMenuScanner/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "WineMenuScanner needs camera access to scan wine menus and identify wines.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "WineMenuScanner needs photo library access to select photos of wine menus to scan.";
+				INFOPLIST_FILE = PocketSomm/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Pocket Somm needs camera access to scan wine menus and identify wines.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Pocket Somm needs photo library access to select photos of wine menus to scan.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -443,9 +443,9 @@
 				CURRENT_PROJECT_VERSION = 1;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_FILE = WineMenuScanner/Info.plist;
-				INFOPLIST_KEY_NSCameraUsageDescription = "WineMenuScanner needs camera access to scan wine menus and identify wines.";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "WineMenuScanner needs photo library access to select photos of wine menus to scan.";
+				INFOPLIST_FILE = PocketSomm/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "Pocket Somm needs camera access to scan wine menus and identify wines.";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "Pocket Somm needs photo library access to select photos of wine menus to scan.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -467,7 +467,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		G1000001000000000000001 /* Build configuration list for PBXProject "WineMenuScanner" */ = {
+		G1000001000000000000001 /* Build configuration list for PBXProject "PocketSomm" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				X1000001000000000000001 /* Debug */,
@@ -476,7 +476,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		G1000003000000000000003 /* Build configuration list for PBXNativeTarget "WineMenuScanner" */ = {
+		G1000003000000000000003 /* Build configuration list for PBXNativeTarget "PocketSomm" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				X1000003000000000000003 /* Debug */,
