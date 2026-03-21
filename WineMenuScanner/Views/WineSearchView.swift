@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import Vision
 
 struct WineSearchView: View {
     @Environment(\.modelContext) private var modelContext
@@ -15,12 +16,24 @@ struct WineSearchView: View {
     @State private var showingAddWine = false
     @State private var selectedWine: Wine?
     @State private var pendingWine: Wine?
+    @State private var showingCamera = false
+    @State private var capturedImage: UIImage?
+    @State private var isScanningLabel = false
 
     var body: some View {
         NavigationStack {
             VStack {
-                if searchText.isEmpty {
-                    SearchEmptyState()
+                if searchText.isEmpty && !isScanningLabel {
+                    SearchEmptyState(onCameraTap: { showingCamera = true })
+                } else if isScanningLabel {
+                    VStack(spacing: 16) {
+                        ProgressView()
+                            .scaleEffect(1.5)
+                        Text("Reading label...")
+                            .font(.nyBody)
+                            .foregroundColor(.secondary)
+                    }
+                    .frame(maxHeight: .infinity)
                 } else if isSearching {
                     ProgressView("Searching...")
                         .frame(maxHeight: .infinity)
@@ -116,6 +129,12 @@ struct WineSearchView: View {
                         dismiss()
                     }
                 }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(action: { showingCamera = true }) {
+                        Image(systemName: "camera")
+                            .foregroundColor(.wineRed)
+                    }
+                }
             }
             .onChange(of: searchText) { _, newValue in
                 performSearch(query: newValue)
@@ -138,6 +157,14 @@ struct WineSearchView: View {
             }
             .navigationDestination(item: $selectedWine) { wine in
                 WineDetailView(wine: wine, onRatingSaved: { shouldDismiss = true })
+            }
+            .sheet(isPresented: $showingCamera) {
+                CameraView(image: $capturedImage)
+            }
+            .onChange(of: capturedImage) { _, newImage in
+                guard let image = newImage else { return }
+                capturedImage = nil
+                scanLabel(image: image)
             }
         }
     }
@@ -188,8 +215,8 @@ struct WineSearchView: View {
         // Create a Wine from Vivino data
         let wine = Wine(
             name: vivinoWine.name,
-            winery: vivinoWine.winery,
             region: vivinoWine.region,
+            winery: vivinoWine.winery,
             country: vivinoWine.country,
             vivinoRating: vivinoWine.rating,
             vivinoRatingsCount: vivinoWine.ratingsCount,
@@ -205,6 +232,127 @@ struct WineSearchView: View {
         // Find or create SwiftData Wine from catalog wine
         let wine = findOrCreateWine(from: catalogWine)
         selectedWine = wine
+    }
+
+    private func scanLabel(image: UIImage) {
+        isScanningLabel = true
+        Task {
+            let searchQuery = await extractLabelSearchQuery(from: image)
+            await MainActor.run {
+                isScanningLabel = false
+                if !searchQuery.isEmpty {
+                    searchText = searchQuery
+                }
+            }
+        }
+    }
+
+    private func extractLabelSearchQuery(from image: UIImage) async -> String {
+        guard let cgImage = image.cgImage else { return "" }
+
+        let texts: [String] = await withCheckedContinuation { continuation in
+            let request = VNRecognizeTextRequest { request, error in
+                guard let observations = request.results as? [VNRecognizedTextObservation] else {
+                    continuation.resume(returning: [])
+                    return
+                }
+                let lines = observations.compactMap { $0.topCandidates(1).first?.string }
+                continuation.resume(returning: lines)
+            }
+            request.recognitionLevel = .accurate
+            request.usesLanguageCorrection = true
+
+            let cgOrientation: CGImagePropertyOrientation
+            switch image.imageOrientation {
+            case .up: cgOrientation = .up
+            case .down: cgOrientation = .down
+            case .left: cgOrientation = .left
+            case .right: cgOrientation = .right
+            case .upMirrored: cgOrientation = .upMirrored
+            case .downMirrored: cgOrientation = .downMirrored
+            case .leftMirrored: cgOrientation = .leftMirrored
+            case .rightMirrored: cgOrientation = .rightMirrored
+            @unknown default: cgOrientation = .up
+            }
+            let handler = VNImageRequestHandler(cgImage: cgImage, orientation: cgOrientation, options: [:])
+            do {
+                try handler.perform([request])
+            } catch {
+                continuation.resume(returning: [])
+            }
+        }
+
+        guard !texts.isEmpty else { return "" }
+
+        // Filter out noise common on wine labels
+        let noisePatterns: [String] = [
+            "750", "375", "1500", "ml", "vol", "alc", "alcohol",
+            "contains sulfites", "sulphites", "government warning",
+            "surgeon general", "drink responsibly", "product of",
+            "imported by", "bottled by", "produced by", "distributed by",
+            "www.", ".com", ".net", "http", "estate bottled",
+            "appellation", "denominación", "denominacion",
+            "vino de", "wine of", "vin de",
+            "registered trademark", "all rights reserved",
+            "lot ", "l.", "cellared", "sustainable", "organic", "biodynamic",
+            "unfiltered", "unfined", "vegan"
+        ]
+
+        let filteredTexts = texts.filter { line in
+            let lower = line.lowercased().trimmingCharacters(in: .whitespacesAndNewlines)
+            // Skip very short lines
+            guard lower.count >= 3 else { return false }
+            // Skip lines that are just numbers/percentages
+            if lower.allSatisfy({ $0.isNumber || $0 == "." || $0 == "%" || $0 == "," || $0.isWhitespace }) {
+                return false
+            }
+            // Skip noise
+            for noise in noisePatterns {
+                if lower.contains(noise) { return false }
+            }
+            return true
+        }
+
+        // Strategy: look for known winery names and vintage years
+        var wineryMatch: String?
+        var vintageYear: String?
+        var bestLines: [String] = []
+
+        for line in filteredTexts {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+
+            // Check for vintage year
+            if vintageYear == nil, let match = trimmed.firstMatch(of: /\b(19|20)\d{2}\b/) {
+                vintageYear = String(match.0)
+            }
+
+            // Check if this line is a known winery
+            if wineryMatch == nil && WineCatalog.shared.isKnownWinery(trimmed) {
+                wineryMatch = trimmed
+                continue
+            }
+
+            bestLines.append(trimmed)
+        }
+
+        // Build search query: prioritize winery + first meaningful line
+        var queryParts: [String] = []
+        if let winery = wineryMatch {
+            queryParts.append(winery)
+        }
+        // Add the first 1-2 non-winery lines (likely the wine name)
+        for line in bestLines.prefix(2) {
+            // Skip if it's just the vintage year
+            if line == vintageYear { continue }
+            queryParts.append(line)
+        }
+
+        // If we found nothing useful, just use the first couple of OCR lines
+        if queryParts.isEmpty {
+            queryParts = Array(filteredTexts.prefix(2))
+        }
+
+        return queryParts.joined(separator: " ")
     }
 
     private func findOrCreateWine(from catalog: CatalogWine) -> Wine {
@@ -317,6 +465,8 @@ struct CatalogWineRowView: View {
 }
 
 struct SearchEmptyState: View {
+    var onCameraTap: () -> Void
+
     var body: some View {
         VStack(spacing: 16) {
             Image(systemName: "magnifyingglass")
@@ -327,10 +477,25 @@ struct SearchEmptyState: View {
                 .font(.nyTitle2)
                 .fontWeight(.semibold)
 
-            Text("Search by wine name, winery, grape variety, or region.")
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-                .padding(.horizontal, 32)
+            VStack(spacing: 12) {
+                Text("Search by wine name, winery, grape variety, or region.")
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+
+                Button(action: onCameraTap) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera")
+                        Text("Or take a photo of the label.")
+                    }
+                    .foregroundColor(.wineRed)
+                }
+
+                Text("Add your own if you can't find a match.")
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(.secondary)
+            }
+            .font(.nyBody)
+            .padding(.horizontal, 32)
         }
         .frame(maxHeight: .infinity)
     }

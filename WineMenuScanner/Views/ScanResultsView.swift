@@ -149,8 +149,8 @@ struct ScanResultsView: View {
                 if let vivinoWine = results.first {
                     let wine = Wine(
                         name: vivinoWine.name,
-                        winery: vivinoWine.winery,
                         region: vivinoWine.region,
+                        winery: vivinoWine.winery,
                         country: vivinoWine.country,
                         vivinoRating: vivinoWine.rating,
                         vivinoRatingsCount: vivinoWine.ratingsCount,

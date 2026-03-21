@@ -26,12 +26,16 @@
 		A1000011000000000000011 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000012000000000000012 /* Theme.swift */; };
 		A1000013000000000000013 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000013000000000000013 /* AppSettings.swift */; };
 		A1000014000000000000014 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000014000000000000014 /* SettingsView.swift */; };
+		DF25C5E52F6B7CB80031D317 /* VivinoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF25C5E42F6B7CB80031D317 /* VivinoService.swift */; };
 		DF3EF3632F2E47D600340A2D /* VivinoImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3EF3622F2E47D600340A2D /* VivinoImportView.swift */; };
 		DF3EF36A2F2E4E6500340A2D /* WineBottleImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3EF3682F2E4E6500340A2D /* WineBottleImage.swift */; };
 		DF3EF36D2F2E800C00340A2D /* WineDataImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3EF36C2F2E800C00340A2D /* WineDataImportView.swift */; };
 		DF3EF36E2F2E800C00340A2D /* AddWineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3EF36B2F2E800C00340A2D /* AddWineView.swift */; };
 		DF3EF3702F2E887900340A2D /* WineCatalog.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3EF36F2F2E887900340A2D /* WineCatalog.swift */; };
 		DF3EF3722F2E888400340A2D /* wines_catalog.sqlite in Resources */ = {isa = PBXBuildFile; fileRef = DF3EF3712F2E888400340A2D /* wines_catalog.sqlite */; };
+		DFD4B6B72F6F14FC001A84B1 /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD4B6B62F6F14FC001A84B1 /* Secrets.swift */; };
+		DFD4B6B92F6F1616001A84B1 /* FeedbackView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD4B6B82F6F1616001A84B1 /* FeedbackView.swift */; };
+		DFD4B6BB2F6F1623001A84B1 /* GitHubService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DFD4B6BA2F6F1623001A84B1 /* GitHubService.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -56,6 +60,7 @@
 		B1000013000000000000013 /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
 		B1000014000000000000014 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C1000001000000000000001 /* WineMenuScanner.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = WineMenuScanner.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DF25C5E42F6B7CB80031D317 /* VivinoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoService.swift; sourceTree = "<group>"; };
 		DF3EF3622F2E47D600340A2D /* VivinoImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoImportView.swift; sourceTree = "<group>"; };
 		DF3EF3662F2E4E5B00340A2D /* VivinoImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoImportView.swift; sourceTree = "<group>"; };
 		DF3EF3682F2E4E6500340A2D /* WineBottleImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WineBottleImage.swift; sourceTree = "<group>"; };
@@ -63,6 +68,9 @@
 		DF3EF36C2F2E800C00340A2D /* WineDataImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WineDataImportView.swift; sourceTree = "<group>"; };
 		DF3EF36F2F2E887900340A2D /* WineCatalog.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WineCatalog.swift; sourceTree = "<group>"; };
 		DF3EF3712F2E888400340A2D /* wines_catalog.sqlite */ = {isa = PBXFileReference; lastKnownFileType = file; path = wines_catalog.sqlite; sourceTree = "<group>"; };
+		DFD4B6B62F6F14FC001A84B1 /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
+		DFD4B6B82F6F1616001A84B1 /* FeedbackView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeedbackView.swift; sourceTree = "<group>"; };
+		DFD4B6BA2F6F1623001A84B1 /* GitHubService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GitHubService.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -87,6 +95,9 @@
 		E1000001000000000000001 = {
 			isa = PBXGroup;
 			children = (
+				DFD4B6B82F6F1616001A84B1 /* FeedbackView.swift */,
+				DFD4B6BA2F6F1623001A84B1 /* GitHubService.swift */,
+				DFD4B6B62F6F14FC001A84B1 /* Secrets.swift */,
 				E1000002000000000000002 /* WineMenuScanner */,
 				E1000003000000000000003 /* Products */,
 			);
@@ -149,6 +160,7 @@
 		E1000006000000000000006 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				DF25C5E42F6B7CB80031D317 /* VivinoService.swift */,
 				DF3EF36F2F2E887900340A2D /* WineCatalog.swift */,
 				B100000E00000000000000E /* UserPreferences.swift */,
 				B100000F00000000000000F /* WineDataImporter.swift */,
@@ -238,9 +250,11 @@
 			buildActionMask = 2147483647;
 			files = (
 				A1000001000000000000001 /* WineMenuScannerApp.swift in Sources */,
+				DFD4B6B72F6F14FC001A84B1 /* Secrets.swift in Sources */,
 				A1000002000000000000002 /* ContentView.swift in Sources */,
 				A1000004000000000000004 /* Wine.swift in Sources */,
 				A1000005000000000000005 /* UserRating.swift in Sources */,
+				DF25C5E52F6B7CB80031D317 /* VivinoService.swift in Sources */,
 				DF3EF36D2F2E800C00340A2D /* WineDataImportView.swift in Sources */,
 				DF3EF36E2F2E800C00340A2D /* AddWineView.swift in Sources */,
 				A1000006000000000000006 /* ScanHistory.swift in Sources */,
@@ -249,8 +263,10 @@
 				A1000008000000000000008 /* MyRatingsView.swift in Sources */,
 				A1000009000000000000009 /* HistoryView.swift in Sources */,
 				A100000A00000000000000A /* WineDetailView.swift in Sources */,
+				DFD4B6BB2F6F1623001A84B1 /* GitHubService.swift in Sources */,
 				A100000B00000000000000B /* WineSearchView.swift in Sources */,
 				DF3EF3632F2E47D600340A2D /* VivinoImportView.swift in Sources */,
+				DFD4B6B92F6F1616001A84B1 /* FeedbackView.swift in Sources */,
 				A100000C00000000000000C /* ScannerView.swift in Sources */,
 				A100000D00000000000000D /* ScanResultsView.swift in Sources */,
 				A100000E00000000000000E /* UserPreferences.swift in Sources */,
