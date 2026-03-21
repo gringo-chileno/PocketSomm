@@ -124,8 +124,9 @@ struct HomeView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showingSettings = true }) {
                         Image(systemName: "gearshape")
-                            .foregroundColor(.wineRed)
+                            .foregroundStyle(.white)
                     }
+                    .tint(.white)
                 }
             }
             .sheet(isPresented: $showingScanner) {
