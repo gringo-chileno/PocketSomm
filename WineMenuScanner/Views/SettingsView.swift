@@ -51,7 +51,7 @@ struct SettingsView: View {
                     Button(action: { showingVivinoImport = true }) {
                         HStack {
                             Image(systemName: "square.and.arrow.down")
-                                .foregroundColor(.wineRed)
+                                .foregroundColor(.white)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Import Ratings")
                                     .font(.nyBody)
@@ -72,7 +72,7 @@ struct SettingsView: View {
                     Button(action: { showingFeedback = true }) {
                         HStack {
                             Image(systemName: "envelope")
-                                .foregroundColor(.wineRed)
+                                .foregroundColor(.white)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("Send Feedback")
                                     .font(.nyBody)
