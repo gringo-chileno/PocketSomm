@@ -54,34 +54,38 @@ class VivinoService {
         }
     }
 
-    /// Parse wine data from the data-preloaded-state JSON embedded in the HTML
+    /// Parse wine data from the JSON embedded in the HTML. Vivino has shipped
+    /// this two ways: data-ssr-props with root.initialExploreResults (current),
+    /// and data-preloaded-state with root.search_results (older markup).
     private func parseSearchResults(from html: String, limit: Int) -> [VivinoWine] {
-        // Find all data-preloaded-state="..." attributes and look for the one with search_results
-        let marker = "data-preloaded-state=\""
-        var searchRange = html.startIndex..<html.endIndex
+        let markers = ["data-ssr-props=\"", "data-preloaded-state=\""]
         var matches: [[String: Any]]?
 
-        while let startMarker = html.range(of: marker, range: searchRange) {
-            let jsonStart = startMarker.upperBound
-            guard let endQuote = html[jsonStart...].range(of: "\"") else { break }
+        outer: for marker in markers {
+            var searchRange = html.startIndex..<html.endIndex
 
-            let encodedJSON = String(html[jsonStart..<endQuote.lowerBound])
-            let decodedJSON = encodedJSON
-                .replacingOccurrences(of: "&quot;", with: "\"")
-                .replacingOccurrences(of: "&amp;", with: "&")
-                .replacingOccurrences(of: "&lt;", with: "<")
-                .replacingOccurrences(of: "&gt;", with: ">")
-                .replacingOccurrences(of: "&#39;", with: "'")
+            while let startMarker = html.range(of: marker, range: searchRange) {
+                let jsonStart = startMarker.upperBound
+                guard let endQuote = html[jsonStart...].range(of: "\"") else { break }
 
-            if let jsonData = decodedJSON.data(using: .utf8),
-               let root = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
-               let searchResults = root["search_results"] as? [String: Any],
-               let foundMatches = searchResults["matches"] as? [[String: Any]] {
-                matches = foundMatches
-                break
+                let encodedJSON = String(html[jsonStart..<endQuote.lowerBound])
+                let decodedJSON = encodedJSON
+                    .replacingOccurrences(of: "&quot;", with: "\"")
+                    .replacingOccurrences(of: "&amp;", with: "&")
+                    .replacingOccurrences(of: "&lt;", with: "<")
+                    .replacingOccurrences(of: "&gt;", with: ">")
+                    .replacingOccurrences(of: "&#39;", with: "'")
+
+                if let jsonData = decodedJSON.data(using: .utf8),
+                   let root = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any],
+                   let container = (root["initialExploreResults"] ?? root["search_results"]) as? [String: Any],
+                   let foundMatches = container["matches"] as? [[String: Any]] {
+                    matches = foundMatches
+                    break outer
+                }
+
+                searchRange = endQuote.upperBound..<html.endIndex
             }
-
-            searchRange = endQuote.upperBound..<html.endIndex
         }
 
         guard let matches = matches else { return [] }

@@ -10,10 +10,12 @@ struct VivinoImportView: View {
     @State private var showingFilePicker = false
     @State private var importResult: ImportResult?
     @State private var isProcessing = false
+    @State private var importProgress: Double = 0
 
     struct ImportResult {
         let totalRows: Int
         let matchedWines: Int
+        let addedWines: Int
         let importedRatings: Int
         let skippedDuplicates: Int
         let errors: [String]
@@ -62,9 +64,10 @@ struct VivinoImportView: View {
                     // Import Button
                     if isProcessing {
                         VStack(spacing: 12) {
-                            ProgressView()
-                                .scaleEffect(1.5)
-                            Text("Importing wines...")
+                            ProgressView(value: importProgress)
+                                .progressViewStyle(.linear)
+                                .frame(width: 200)
+                            Text("Importing wines... \(Int(importProgress * 100))%")
                                 .font(.nyBody)
                                 .foregroundColor(.secondary)
                         }
@@ -96,30 +99,13 @@ struct VivinoImportView: View {
                             }
 
                             VStack(alignment: .leading, spacing: 8) {
-                                ResultRow(label: "Total rows in file", value: "\(result.totalRows)")
-                                ResultRow(label: "Wines matched", value: "\(result.matchedWines)")
                                 ResultRow(label: "Ratings imported", value: "\(result.importedRatings)")
+                                ResultRow(label: "Matched from catalog", value: "\(result.matchedWines)")
+                                if result.addedWines > 0 {
+                                    ResultRow(label: "New wines added", value: "\(result.addedWines)")
+                                }
                                 if result.skippedDuplicates > 0 {
                                     ResultRow(label: "Skipped (already rated)", value: "\(result.skippedDuplicates)")
-                                }
-                            }
-
-                            if !result.errors.isEmpty {
-                                Text("Wines not found in catalog:")
-                                    .font(.nyCaption)
-                                    .foregroundColor(.secondary)
-                                    .padding(.top, 8)
-
-                                ForEach(result.errors.prefix(5), id: \.self) { error in
-                                    Text("• \(error)")
-                                        .font(.nyCaption)
-                                        .foregroundColor(.secondary)
-                                }
-
-                                if result.errors.count > 5 {
-                                    Text("...and \(result.errors.count - 5) more")
-                                        .font(.nyCaption)
-                                        .foregroundColor(.secondary)
                                 }
                             }
                         }
@@ -172,12 +158,9 @@ struct VivinoImportView: View {
     }
 
     private func processFile(_ url: URL) {
-        isProcessing = true
-
-        // Read file content first (can be done off main thread)
+        // Read file content while security-scoped access is valid
         guard url.startAccessingSecurityScopedResource() else {
-            importResult = ImportResult(totalRows: 0, matchedWines: 0, importedRatings: 0, skippedDuplicates: 0, errors: ["Could not access file"])
-            isProcessing = false
+            importResult = ImportResult(totalRows: 0, matchedWines: 0, addedWines: 0, importedRatings: 0, skippedDuplicates: 0, errors: ["Could not access file"])
             return
         }
 
@@ -186,21 +169,27 @@ struct VivinoImportView: View {
             content = try String(contentsOf: url, encoding: .utf8)
         } catch {
             url.stopAccessingSecurityScopedResource()
-            importResult = ImportResult(totalRows: 0, matchedWines: 0, importedRatings: 0, skippedDuplicates: 0, errors: ["Error reading file: \(error.localizedDescription)"])
-            isProcessing = false
+            importResult = ImportResult(totalRows: 0, matchedWines: 0, addedWines: 0, importedRatings: 0, skippedDuplicates: 0, errors: ["Error reading file: \(error.localizedDescription)"])
             return
         }
         url.stopAccessingSecurityScopedResource()
 
-        // Parse CSV and import - all on main actor
-        importResult = importVivinoCSV(content: content)
-        isProcessing = false
+        isProcessing = true
+        importProgress = 0
+
+        // Run import async so progress updates can render
+        Task { @MainActor in
+            try? await Task.sleep(nanoseconds: 200_000_000)
+            let result = await importVivinoCSV(content: content)
+            isProcessing = false
+            importResult = result
+        }
     }
 
-    // All SwiftData work happens on main actor
-    private func importVivinoCSV(content: String) -> ImportResult {
+    private func importVivinoCSV(content: String) async -> ImportResult {
         var totalRows = 0
         var matchedWines = 0
+        var addedWines = 0
         var importedRatings = 0
         var skippedDuplicates = 0
         var errors: [String] = []
@@ -208,7 +197,7 @@ struct VivinoImportView: View {
         let lines = content.components(separatedBy: .newlines)
 
         guard let headerLine = lines.first else {
-            return ImportResult(totalRows: 0, matchedWines: 0, importedRatings: 0, skippedDuplicates: 0, errors: ["Empty file"])
+            return ImportResult(totalRows: 0, matchedWines: 0, addedWines: 0, importedRatings: 0, skippedDuplicates: 0, errors: ["Empty file"])
         }
 
         let headers = parseCSVLine(headerLine).map { $0.lowercased() }
@@ -224,13 +213,17 @@ struct VivinoImportView: View {
         let countryIndex = headers.firstIndex(where: { $0.contains("country") })
 
         guard let nameIdx = nameIndex else {
-            return ImportResult(totalRows: 0, matchedWines: 0, importedRatings: 0, skippedDuplicates: 0, errors: ["Could not find wine name column"])
+            return ImportResult(totalRows: 0, matchedWines: 0, addedWines: 0, importedRatings: 0, skippedDuplicates: 0, errors: ["Could not find wine name column"])
         }
 
         // Process data rows
-        for line in lines.dropFirst() {
-            guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+        let dataLines = lines.dropFirst().filter { !$0.trimmingCharacters(in: .whitespaces).isEmpty }
+        let totalLines = dataLines.count
+
+        for (lineIndex, line) in dataLines.enumerated() {
             totalRows += 1
+            importProgress = Double(lineIndex + 1) / Double(max(totalLines, 1))
+            await Task.yield()
 
             let fields = parseCSVLine(line)
             guard fields.count > nameIdx else { continue }
@@ -265,8 +258,14 @@ struct VivinoImportView: View {
                     // Pass avgRating from CSV if available; otherwise use catalog rating
                     let wine = getOrCreateWine(from: catalogWine, csvVintage: vintage, csvAvgRating: avgRating)
 
-                    // Check if rating already exists for this wine
-                    if wine.userRatings?.isEmpty == false {
+                    // Only skip if exact same rating value already exists for this wine+vintage
+                    let ratingCapped = min(5.0, ratingValue)
+                    let vintageToCheck = vintage ?? catalogWine.vintage
+                    let isDuplicate = wine.userRatings?.contains(where: {
+                        $0.rating == ratingCapped && $0.vintage == vintageToCheck
+                    }) ?? false
+
+                    if isDuplicate {
                         skippedDuplicates += 1
                         continue
                     }
@@ -274,9 +273,9 @@ struct VivinoImportView: View {
                     // Create the rating
                     let userRating = UserRating(
                         wine: wine,
-                        rating: min(5.0, ratingValue),
+                        rating: ratingCapped,
                         notes: "Imported",
-                        vintage: vintage ?? catalogWine.vintage
+                        vintage: vintageToCheck
                     )
                     modelContext.insert(userRating)
 
@@ -290,7 +289,35 @@ struct VivinoImportView: View {
                     errors.append("\(wineName) - no rating value")
                 }
             } else {
-                errors.append("\(wineName) - \(winery ?? "unknown winery") (not found)")
+                // Wine not in catalog — add it directly from CSV data
+                if let ratingValue = rating, ratingValue > 0 {
+                    let wine = Wine(
+                        name: wineName,
+                        vintage: vintage,
+                        region: nil,
+                        grapeVariety: nil,
+                        averageRating: nil,
+                        winery: winery,
+                        country: country,
+                        priceUSD: nil,
+                        wineType: nil,
+                        body: nil,
+                        acidity: nil,
+                        foodPairings: nil
+                    )
+                    modelContext.insert(wine)
+                    addedWines += 1
+
+                    let userRating = UserRating(
+                        wine: wine,
+                        rating: min(5.0, ratingValue),
+                        notes: "Imported",
+                        vintage: vintage
+                    )
+                    modelContext.insert(userRating)
+                    wine.userRatings = [userRating]
+                    importedRatings += 1
+                }
             }
         }
 
@@ -309,7 +336,7 @@ struct VivinoImportView: View {
             print("Error saving ratings: \(error)")
         }
 
-        return ImportResult(totalRows: totalRows, matchedWines: matchedWines, importedRatings: importedRatings, skippedDuplicates: skippedDuplicates, errors: errors)
+        return ImportResult(totalRows: totalRows, matchedWines: matchedWines, addedWines: addedWines, importedRatings: importedRatings, skippedDuplicates: skippedDuplicates, errors: errors)
     }
 
     private func findCatalogMatch(name: String, winery: String?, country: String?) -> CatalogWine? {

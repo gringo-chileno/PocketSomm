@@ -19,6 +19,7 @@ struct WineSearchView: View {
     @State private var showingCamera = false
     @State private var capturedImage: UIImage?
     @State private var isScanningLabel = false
+    @State private var searchTask: Task<Void, Never>?
 
     var body: some View {
         NavigationStack {
@@ -132,7 +133,7 @@ struct WineSearchView: View {
                 ToolbarItem(placement: .topBarTrailing) {
                     Button(action: { showingCamera = true }) {
                         Image(systemName: "camera")
-                            .foregroundColor(.wineRed)
+                            .foregroundColor(.white)
                     }
                 }
             }
@@ -170,44 +171,44 @@ struct WineSearchView: View {
     }
 
     private func performSearch(query: String) {
-        guard !query.isEmpty else {
+        searchTask?.cancel()
+
+        guard !query.isEmpty, query.count >= 2 else {
             catalogResults = []
             userWineResults = []
             vivinoResults = []
+            isSearching = false
             return
         }
 
         isSearching = true
 
-        // Debounce search
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            guard query == searchText else { return }
+        searchTask = Task {
+            // Debounce — wait for typing to pause
+            try? await Task.sleep(nanoseconds: 400_000_000)
+            guard !Task.isCancelled, query == searchText else { return }
 
-            // Search the SQLite catalog (instant!)
+            // Search the SQLite catalog
             catalogResults = WineCatalog.shared.search(query: query, limit: 50)
 
-            // Also search user's SwiftData wines (manually added, from scans, from Vivino)
+            // Also search user's SwiftData wines
+            let searchQuery = query
             let descriptor = FetchDescriptor<Wine>(
                 predicate: #Predicate<Wine> { wine in
-                    wine.name.localizedStandardContains(query) ||
-                    (wine.winery ?? "").localizedStandardContains(query) ||
-                    (wine.grapeVariety ?? "").localizedStandardContains(query) ||
-                    (wine.region ?? "").localizedStandardContains(query)
+                    wine.name.localizedStandardContains(searchQuery)
                 }
             )
             userWineResults = (try? modelContext.fetch(descriptor)) ?? []
 
             isSearching = false
 
-            // Also search Vivino in the background
-            let currentQuery = query
-            Task {
-                isSearchingVivino = true
-                let results = await VivinoService.shared.search(query: currentQuery, limit: 5)
-                guard currentQuery == searchText else { return }
-                vivinoResults = results
-                isSearchingVivino = false
-            }
+            // Only search Vivino after 3+ characters
+            guard !Task.isCancelled, query.count >= 3 else { return }
+            isSearchingVivino = true
+            let results = await VivinoService.shared.search(query: query, limit: 5)
+            guard !Task.isCancelled, query == searchText else { return }
+            vivinoResults = results
+            isSearchingVivino = false
         }
     }
 
@@ -483,11 +484,8 @@ struct SearchEmptyState: View {
                     .foregroundColor(.secondary)
 
                 Button(action: onCameraTap) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "camera")
-                        Text("Or take a photo of the label.")
-                    }
-                    .foregroundColor(.wineRed)
+                    Text("Or take a photo of the label.")
+                    .foregroundColor(.secondary)
                 }
 
                 Text("Add your own if you can't find a match.")

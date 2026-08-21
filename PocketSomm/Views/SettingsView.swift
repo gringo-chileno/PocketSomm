@@ -8,6 +8,8 @@ struct SettingsView: View {
     @State private var showingVivinoImport = false
     @State private var showingResetConfirmation = false
     @State private var showingFeedback = false
+    @State private var showingExport = false
+    @State private var csvURL: URL?
 
     var body: some View {
         NavigationStack {
@@ -62,6 +64,20 @@ struct SettingsView: View {
                             }
                         }
                     }
+                    Button(action: { exportCSV() }) {
+                        HStack {
+                            Image(systemName: "square.and.arrow.up")
+                                .foregroundColor(.white)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("Export My Wines")
+                                    .font(.nyBody)
+                                    .foregroundColor(.primary)
+                                Text("Save all your wines and ratings as a CSV backup")
+                                    .font(.nyCaption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
                 } header: {
                     Text("Data")
                         .font(.nyCaption)
@@ -94,7 +110,7 @@ struct SettingsView: View {
                         Text("Version")
                             .font(.nyBody)
                         Spacer()
-                        Text("1.0.0")
+                        Text("1.0.1")
                             .font(.nyBody)
                             .foregroundColor(.secondary)
                     }
@@ -162,7 +178,58 @@ struct SettingsView: View {
             .sheet(isPresented: $showingFeedback) {
                 FeedbackView()
             }
+            .sheet(isPresented: $showingExport) {
+                if let url = csvURL {
+                    ShareSheet(items: [url])
+                }
+            }
         }
+    }
+
+    private func exportCSV() {
+        let descriptor = FetchDescriptor<Wine>(sortBy: [SortDescriptor(\.name)])
+        guard let wines = try? modelContext.fetch(descriptor), !wines.isEmpty else { return }
+
+        var csv = "Name,Vintage,Winery,Variety,Region,Country,Type,My Rating,Rating Date,Notes,Community Rating,Vivino Rating\n"
+
+        let dateFormatter = DateFormatter()
+        dateFormatter.dateFormat = "yyyy-MM-dd"
+
+        for wine in wines {
+            let rating = wine.userRating
+            let fields: [String] = [
+                escapeCSV(wine.name),
+                wine.vintage.map { String($0) } ?? "",
+                escapeCSV(wine.winery ?? ""),
+                escapeCSV(wine.grapeVariety ?? ""),
+                escapeCSV(wine.region ?? ""),
+                escapeCSV(wine.country ?? ""),
+                escapeCSV(wine.wineType ?? ""),
+                rating.map { String(format: "%.1f", $0.rating) } ?? "",
+                rating.map { dateFormatter.string(from: $0.dateRated) } ?? "",
+                escapeCSV(rating?.notes ?? ""),
+                wine.averageRating.map { String(format: "%.1f", $0) } ?? "",
+                wine.vivinoRating.map { String(format: "%.1f", $0) } ?? ""
+            ]
+            csv += fields.joined(separator: ",") + "\n"
+        }
+
+        let tempURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("pocket_somm_export_\(dateFormatter.string(from: Date())).csv")
+        do {
+            try csv.write(to: tempURL, atomically: true, encoding: .utf8)
+            csvURL = tempURL
+            showingExport = true
+        } catch {
+            print("Error writing CSV: \(error)")
+        }
+    }
+
+    private func escapeCSV(_ value: String) -> String {
+        if value.contains(",") || value.contains("\"") || value.contains("\n") {
+            return "\"" + value.replacingOccurrences(of: "\"", with: "\"\"") + "\""
+        }
+        return value
     }
 
     private func clearUserData() {
@@ -175,6 +242,16 @@ struct SettingsView: View {
             print("Error clearing data: \(error)")
         }
     }
+}
+
+struct ShareSheet: UIViewControllerRepresentable {
+    let items: [Any]
+
+    func makeUIViewController(context: Context) -> UIActivityViewController {
+        UIActivityViewController(activityItems: items, applicationActivities: nil)
+    }
+
+    func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
 }
 
 #Preview {

@@ -168,99 +168,121 @@ struct WineDataImportView: View {
     }
 
     private func importWines(from url: URL) {
+        // Read file content while security-scoped access is valid
+        guard url.startAccessingSecurityScopedResource() else {
+            importResult = ImportResult(imported: 0, skipped: 0, errors: ["Cannot access file"])
+            return
+        }
+
+        let content: String
+        do {
+            content = try String(contentsOf: url, encoding: .utf8)
+        } catch {
+            url.stopAccessingSecurityScopedResource()
+            importResult = ImportResult(imported: 0, skipped: 0, errors: ["Error reading file: \(error.localizedDescription)"])
+            return
+        }
+        url.stopAccessingSecurityScopedResource()
+
+        let container = modelContext.container
         isImporting = true
 
         Task {
-            var imported = 0
-            var skipped = 0
-            var errors: [String] = []
+            // Yield so SwiftUI renders the spinner
+            await Task.yield()
 
-            do {
-                guard url.startAccessingSecurityScopedResource() else {
-                    throw NSError(domain: "WineImport", code: 1, userInfo: [NSLocalizedDescriptionKey: "Cannot access file"])
-                }
-                defer { url.stopAccessingSecurityScopedResource() }
+            // Run heavy work on background thread, await result on main actor
+            let result = await Task.detached {
+                return Self.processCSVContent(content, container: container)
+            }.value
 
-                let content = try String(contentsOf: url, encoding: .utf8)
-                let lines = content.components(separatedBy: .newlines)
-
-                guard !lines.isEmpty else {
-                    throw NSError(domain: "WineImport", code: 2, userInfo: [NSLocalizedDescriptionKey: "File is empty"])
-                }
-
-                // Parse header to find column indices
-                let headerLine = lines[0].lowercased()
-                let headers = parseCSVLine(headerLine)
-
-                let nameIndex = headers.firstIndex { $0.contains("name") } ?? 0
-                let wineryIndex = headers.firstIndex { $0.contains("winery") }
-                let varietyIndex = headers.firstIndex { $0.contains("variety") || $0.contains("grape") }
-                let regionIndex = headers.firstIndex { $0.contains("region") }
-                let countryIndex = headers.firstIndex { $0.contains("country") }
-                let vintageIndex = headers.firstIndex { $0.contains("vintage") || $0.contains("year") }
-                let ratingIndex = headers.firstIndex { $0.contains("rating") }
-                let typeIndex = headers.firstIndex { $0.contains("type") }
-
-                // Process each line
-                for (index, line) in lines.dropFirst().enumerated() {
-                    guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
-
-                    let fields = parseCSVLine(line)
-                    guard fields.count > nameIndex else {
-                        errors.append("Line \(index + 2): Not enough columns")
-                        continue
-                    }
-
-                    let name = fields[nameIndex].trimmingCharacters(in: .whitespaces)
-                    guard !name.isEmpty else { continue }
-
-                    // Check for duplicate
-                    let descriptor = FetchDescriptor<Wine>(
-                        predicate: #Predicate<Wine> { wine in
-                            wine.name == name
-                        }
-                    )
-                    let existingCount = (try? modelContext.fetchCount(descriptor)) ?? 0
-
-                    if existingCount > 0 {
-                        skipped += 1
-                        continue
-                    }
-
-                    // Create wine
-                    let wine = Wine(
-                        name: name,
-                        vintage: vintageIndex.flatMap { fields.count > $0 ? Int(fields[$0]) : nil },
-                        region: regionIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
-                        grapeVariety: varietyIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
-                        averageRating: ratingIndex.flatMap { fields.count > $0 ? Double(fields[$0]) : nil },
-                        winery: wineryIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
-                        country: countryIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
-                        priceUSD: nil,
-                        wineType: typeIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
-                        body: nil,
-                        acidity: nil,
-                        foodPairings: nil
-                    )
-
-                    modelContext.insert(wine)
-                    imported += 1
-                }
-
-                try modelContext.save()
-
-            } catch {
-                errors.append(error.localizedDescription)
-            }
-
-            await MainActor.run {
-                importResult = ImportResult(imported: imported, skipped: skipped, errors: errors)
-                isImporting = false
-            }
+            importResult = result
+            isImporting = false
         }
     }
 
-    private func parseCSVLine(_ line: String) -> [String] {
+    private static func processCSVContent(_ content: String, container: ModelContainer) -> ImportResult {
+        var imported = 0
+        var skipped = 0
+        var errors: [String] = []
+
+        let backgroundContext = ModelContext(container)
+
+        let lines = content.components(separatedBy: .newlines)
+
+        guard !lines.isEmpty else {
+            return ImportResult(imported: 0, skipped: 0, errors: ["File is empty"])
+        }
+
+        // Parse header to find column indices
+        let headerLine = lines[0].lowercased()
+        let headers = parseCSVLine(headerLine)
+
+        let nameIndex = headers.firstIndex { $0.contains("name") } ?? 0
+        let wineryIndex = headers.firstIndex { $0.contains("winery") }
+        let varietyIndex = headers.firstIndex { $0.contains("variety") || $0.contains("grape") }
+        let regionIndex = headers.firstIndex { $0.contains("region") }
+        let countryIndex = headers.firstIndex { $0.contains("country") }
+        let vintageIndex = headers.firstIndex { $0.contains("vintage") || $0.contains("year") }
+        let ratingIndex = headers.firstIndex { $0.contains("rating") }
+        let typeIndex = headers.firstIndex { $0.contains("type") }
+
+        // Process each line
+        for (index, line) in lines.dropFirst().enumerated() {
+            guard !line.trimmingCharacters(in: .whitespaces).isEmpty else { continue }
+
+            let fields = parseCSVLine(line)
+            guard fields.count > nameIndex else {
+                errors.append("Line \(index + 2): Not enough columns")
+                continue
+            }
+
+            let name = fields[nameIndex].trimmingCharacters(in: .whitespaces)
+            guard !name.isEmpty else { continue }
+
+            // Check for duplicate
+            let descriptor = FetchDescriptor<Wine>(
+                predicate: #Predicate<Wine> { wine in
+                    wine.name == name
+                }
+            )
+            let existingCount = (try? backgroundContext.fetchCount(descriptor)) ?? 0
+
+            if existingCount > 0 {
+                skipped += 1
+                continue
+            }
+
+            // Create wine
+            let wine = Wine(
+                name: name,
+                vintage: vintageIndex.flatMap { fields.count > $0 ? Int(fields[$0]) : nil },
+                region: regionIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
+                grapeVariety: varietyIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
+                averageRating: ratingIndex.flatMap { fields.count > $0 ? Double(fields[$0]) : nil },
+                winery: wineryIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
+                country: countryIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
+                priceUSD: nil,
+                wineType: typeIndex.flatMap { fields.count > $0 && !fields[$0].isEmpty ? fields[$0] : nil },
+                body: nil,
+                acidity: nil,
+                foodPairings: nil
+            )
+
+            backgroundContext.insert(wine)
+            imported += 1
+        }
+
+        do {
+            try backgroundContext.save()
+        } catch {
+            errors.append(error.localizedDescription)
+        }
+
+        return ImportResult(imported: imported, skipped: skipped, errors: errors)
+    }
+
+    private static func parseCSVLine(_ line: String) -> [String] {
         var fields: [String] = []
         var currentField = ""
         var insideQuotes = false
