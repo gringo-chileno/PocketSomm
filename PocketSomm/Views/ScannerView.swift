@@ -231,6 +231,9 @@ struct ScannerView: View {
         // Filter and clean up detected texts to find wine names
         var wineNames: [String] = []
         var currentVariety: String? = nil
+        // Wine's proper name from the previous line, for menus that put the
+        // fantasy name alone above a "VARIETY. WINERY; PLACE, VALLEY" detail line
+        var pendingHeader: String? = nil
 
         // Menu section headers and non-wine items to exclude (Spanish/English)
         let excludedPatterns = [
@@ -360,6 +363,33 @@ struct ScannerView: View {
                 continue
             }
 
+            // Detail lines in "VARIETY. WINERY; PLACE, VALLEY" menus: normalize
+            // periods/semicolons to commas so comma-based matching applies, and
+            // prepend the wine's proper name from the preceding header line
+            let headSegment = trimmed.components(separatedBy: CharacterSet(charactersIn: ".;,"))
+                .first?.trimmingCharacters(in: .whitespaces).lowercased() ?? ""
+            let startsWithVariety = grapeVarieties.contains { headSegment == $0 || headSegment.hasSuffix(" \($0)") }
+            if trimmed.contains(";") || (trimmed.contains(".") && startsWithVariety) {
+                var normalized = trimmed
+                    .replacingOccurrences(of: ";", with: ",")
+                    .replacingOccurrences(of: ". ", with: ", ")
+                while normalized.hasSuffix(".") { normalized.removeLast() }
+                if let header = pendingHeader {
+                    // The header was this wine's name, not its own entry — if it
+                    // slipped in standalone (e.g. as a known winery), fold it in
+                    if let last = wineNames.last,
+                       (last.components(separatedBy: ScannerView.varietySeparator).first ?? last)
+                           .caseInsensitiveCompare(header) == .orderedSame {
+                        wineNames.removeLast()
+                    }
+                    if !normalized.lowercased().hasPrefix(header.lowercased()) {
+                        normalized = header + ", " + normalized
+                    }
+                    pendingHeader = nil
+                }
+                trimmed = normalized
+            }
+
             // Wine entry indicators (winery/estate terms, NOT grape varieties)
             let wineEntryKeywords = ["château", "chateau", "domaine", "estate", "vineyard", "winery",
                                "reserve", "reserva", "gran reserva", "grand cru", "premier cru",
@@ -381,6 +411,82 @@ struct ScannerView: View {
                     wineNames.append(trimmed + ScannerView.varietySeparator + variety)
                 } else {
                     wineNames.append(trimmed)
+                }
+            }
+
+            // Remember short name-like lines — menus often put the wine's proper
+            // name alone on the line above its details
+            let letterCount = trimmed.filter { $0.isLetter }.count
+            pendingHeader = (words.count <= 4 && trimmed.count <= 32 && letterCount >= 3 && !trimmed.contains(","))
+                ? trimmed : nil
+        }
+
+        // Label scan fallback: when OCR returns few lines and we extracted few/no
+        // wine names, this is likely a wine label rather than a menu. Combine the
+        // short text fragments into a single search query.
+        if wineNames.count <= 2 && texts.count <= 25 {
+            let descriptionWords: Set<String> = [
+                "this", "and", "the", "with", "has", "its", "our", "wine", "wines",
+                "is", "are", "from", "made", "produced", "aged", "bottle", "bottled",
+                "smooth", "elegant", "balanced", "juicy", "tense", "unique", "intense"
+            ]
+
+            var labelParts: [String] = []
+            var labelVariety: String? = nil
+
+            for text in texts {
+                let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                let words = trimmed.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+
+                // Keep only short fragments (1-4 words, 2-40 chars)
+                guard trimmed.count >= 2 && trimmed.count <= 40 && words.count <= 4 else { continue }
+
+                let lower = trimmed.lowercased()
+
+                // Skip URLs, volumes, percentages, legal text
+                if lower.contains(".com") || lower.contains("www.") || lower.contains("http") { continue }
+                if trimmed.hasSuffix("%") { continue }
+                if lower.hasSuffix(" cl") || lower.hasSuffix(" ml") || lower.hasSuffix(" lt") { continue }
+                if lower.contains("sulfite") || lower.contains("alcohol") || lower.contains("contains") { continue }
+
+                // Skip pure numbers/punctuation
+                let letters = trimmed.filter { $0.isLetter }
+                if letters.isEmpty { continue }
+
+                // Skip descriptive phrases (2+ common description words)
+                let fragWords = lower.components(separatedBy: .whitespaces).filter { !$0.isEmpty }
+                if fragWords.count > 1 {
+                    let descCount = fragWords.filter { descriptionWords.contains($0) }.count
+                    if descCount >= 2 { continue }
+                }
+
+                // Check if this is a grape variety — use as context, don't include in name
+                let cleanLower = lower.filter { $0.isLetter || $0 == " " }
+                    .trimmingCharacters(in: .whitespaces)
+                if grapeVarieties.contains(cleanLower) {
+                    labelVariety = cleanLower
+                    continue
+                }
+
+                // Keep the cleaned fragment (alphanumeric + spaces only)
+                let cleaned = trimmed.filter { $0.isLetter || $0.isNumber || $0 == " " }
+                    .trimmingCharacters(in: .whitespaces)
+                if !cleaned.isEmpty && cleaned.count >= 2 {
+                    labelParts.append(cleaned)
+                }
+            }
+
+            if !labelParts.isEmpty {
+                let combined = labelParts.joined(separator: " ")
+                let existingNames = Set(wineNames.map {
+                    $0.components(separatedBy: ScannerView.varietySeparator).first?.lowercased() ?? ""
+                })
+                if !existingNames.contains(combined.lowercased()) {
+                    if let variety = labelVariety {
+                        wineNames.insert(combined + ScannerView.varietySeparator + variety, at: 0)
+                    } else {
+                        wineNames.insert(combined, at: 0)
+                    }
                 }
             }
         }

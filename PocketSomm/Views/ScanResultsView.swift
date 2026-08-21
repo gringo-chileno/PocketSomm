@@ -251,11 +251,32 @@ struct ScanResultsView: View {
                         return createWineFromCatalog(catalogWine)
                     }
 
+                    // Menu-header format: "Name, Variety, Winery, Place" — a later
+                    // part naming the grape gives the most precise query (e.g.
+                    // "SOLDESOL, CHARDONNAY, VIÑA AQUITANIA, ..." → "SOLDESOL chardonnay")
+                    let sortedVarieties = grapeVarieties.sorted { $0.count > $1.count }
+                    let entryVariety = parts.dropFirst().compactMap { part -> String? in
+                        let lower = part.lowercased()
+                        return sortedVarieties.first { lower == $0 || lower.hasSuffix(" \($0)") || lower.hasPrefix("\($0) ") }
+                    }.first
+                    if let entryVariety {
+                        let nameVarietyResults = WineCatalog.shared.search(query: "\(parts[0]) \(entryVariety)", limit: 1)
+                        if let catalogWine = nameVarietyResults.first {
+                            return createWineFromCatalog(catalogWine)
+                        }
+                    }
+
                     // Try just the winery name (before the comma) + variety
                     let wineryQuery = variety != nil ? "\(parts[0]) \(variety!)" : parts[0]
                     let wineryResults = WineCatalog.shared.search(query: wineryQuery, limit: 1)
                     if let catalogWine = wineryResults.first {
-                        return createWineFromCatalog(catalogWine)
+                        // When the menu named a grape, a bare-name hit must agree on
+                        // variety — fantasy names otherwise match unrelated wines
+                        // (e.g. "ARTESANO" → a Portuguese Alicante Bouschet)
+                        let matchVariety = catalogWine.variety?.lowercased() ?? ""
+                        if entryVariety == nil || matchVariety.contains(entryVariety!) || entryVariety!.contains(matchVariety) {
+                            return createWineFromCatalog(catalogWine)
+                        }
                     }
                 }
             }
@@ -533,7 +554,7 @@ struct NoWinesDetectedView: View {
                 .font(.nyTitle2)
                 .fontWeight(.semibold)
 
-            Text("We couldn't find any wine names in this image. Try scanning a clearer photo of a wine menu.")
+            Text("We couldn't find any wine names in this image. Try scanning a clearer photo of a wine menu or label.")
                 .multilineTextAlignment(.center)
                 .foregroundColor(.secondary)
                 .padding(.horizontal, 32)
