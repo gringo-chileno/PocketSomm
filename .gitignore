@@ -28,3 +28,4 @@ fastlane/screenshots/**/*.png
 Secrets.swift
 scripts/vivino_data/
 __pycache__/
+Icon?
