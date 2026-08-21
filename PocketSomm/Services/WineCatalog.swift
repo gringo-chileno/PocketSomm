@@ -63,7 +63,10 @@ class WineCatalog {
     }
 
     private func openDatabase() {
-        guard let dbPath = Bundle.main.path(forResource: "wines_catalog", ofType: "sqlite") else {
+        // WINE_CATALOG_PATH override lets the offline harness in scripts/
+        // run this class on a Mac against the repo copy of the catalog
+        let envPath = ProcessInfo.processInfo.environment["WINE_CATALOG_PATH"]
+        guard let dbPath = envPath ?? Bundle.main.path(forResource: "wines_catalog", ofType: "sqlite") else {
             print("Could not find wines_catalog.sqlite in bundle")
             return
         }

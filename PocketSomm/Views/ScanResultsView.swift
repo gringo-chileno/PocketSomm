@@ -95,7 +95,7 @@ struct ScanResultsView: View {
 
             for entry in scan.detectedWineNames {
                 // Parse variety context if encoded (format: "name\tvariety")
-                let parts = entry.components(separatedBy: ScannerView.varietySeparator)
+                let parts = entry.components(separatedBy: MenuScanEngine.varietySeparator)
                 let name = parts[0]
                 let variety = parts.count > 1 ? parts[1] : nil
 
@@ -180,7 +180,6 @@ struct ScanResultsView: View {
         }
 
         // Check SwiftData for existing wine
-        let cleanedName = name.filter { $0.isLetter || $0.isNumber || $0 == " " }
         let descriptor = FetchDescriptor<Wine>(
             predicate: #Predicate<Wine> { wine in
                 wine.name.localizedStandardContains(name)
@@ -190,96 +189,9 @@ struct ScanResultsView: View {
             return existing
         }
 
-        // Build search query — append variety from menu section header if available
-        let searchQuery = variety != nil ? "\(cleanedName) \(variety!)" : cleanedName
-
-        // Search the catalog with full detected name (+ variety context)
-        let catalogResults = WineCatalog.shared.search(query: searchQuery, limit: 1)
-        if let catalogWine = catalogResults.first {
+        // Catalog search (extraction formats + fallbacks live in MenuScanEngine)
+        if let catalogWine = MenuScanEngine.findCatalogMatch(for: name, variety: variety) {
             return createWineFromCatalog(catalogWine)
-        }
-
-        // If comma-separated, handle two menu formats:
-        // Format A: "Winery, Wine Name" (e.g., "Vik, A")
-        // Format B: "Variety, Winery Details, Region" (e.g., "Pinot Noir, Montes Outer Limits, Zapallar")
-        if name.contains(",") {
-            let parts = name.components(separatedBy: ",")
-                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-                .filter { !$0.isEmpty }
-
-            if parts.count >= 2 {
-                let grapeVarieties: Set<String> = [
-                    "cabernet sauvignon", "cabernet franc", "cabernet", "merlot",
-                    "pinot noir", "pinot grigio", "pinot gris", "pinot",
-                    "chardonnay", "sauvignon blanc", "sauvignon",
-                    "syrah", "shiraz", "riesling", "malbec", "zinfandel",
-                    "carmenere", "carménère", "tempranillo", "sangiovese",
-                    "garnacha", "grenache", "cinsault", "mourvèdre",
-                    "pais", "país", "viognier", "gewürztraminer",
-                    "semillon", "sémillon", "muscat", "moscatel",
-                    "torrontés", "carignan", "petit verdot", "petite sirah",
-                    "nebbiolo", "red blend", "white blend", "ensamblaje"
-                ]
-
-                let firstPartLower = parts[0].lowercased()
-                let firstPartIsVariety = grapeVarieties.contains(firstPartLower)
-
-                if firstPartIsVariety {
-                    // Format B: "Variety, Winery/Wine, Region"
-                    // Search with remaining parts + variety name
-                    let wineryAndRegion = Array(parts[1...]).joined(separator: " ")
-                    let queryWithVariety = "\(wineryAndRegion) \(parts[0])"
-                    let results = WineCatalog.shared.search(query: queryWithVariety, limit: 1)
-                    if let catalogWine = results.first {
-                        return createWineFromCatalog(catalogWine)
-                    }
-
-                    // Try just the winery part (second segment) + variety
-                    if parts.count >= 3 {
-                        let wineryOnly = "\(parts[1]) \(parts[0])"
-                        let wineryResults = WineCatalog.shared.search(query: wineryOnly, limit: 1)
-                        if let catalogWine = wineryResults.first {
-                            return createWineFromCatalog(catalogWine)
-                        }
-                    }
-                } else {
-                    // Format A: "Winery, Wine Name"
-                    let reordered = (Array(parts[1...]) + [parts[0]]).joined(separator: " ")
-                    let reorderedQuery = variety != nil ? "\(reordered) \(variety!)" : reordered
-                    let reorderedResults = WineCatalog.shared.search(query: reorderedQuery, limit: 1)
-                    if let catalogWine = reorderedResults.first {
-                        return createWineFromCatalog(catalogWine)
-                    }
-
-                    // Menu-header format: "Name, Variety, Winery, Place" — a later
-                    // part naming the grape gives the most precise query (e.g.
-                    // "SOLDESOL, CHARDONNAY, VIÑA AQUITANIA, ..." → "SOLDESOL chardonnay")
-                    let sortedVarieties = grapeVarieties.sorted { $0.count > $1.count }
-                    let entryVariety = parts.dropFirst().compactMap { part -> String? in
-                        let lower = part.lowercased()
-                        return sortedVarieties.first { lower == $0 || lower.hasSuffix(" \($0)") || lower.hasPrefix("\($0) ") }
-                    }.first
-                    if let entryVariety {
-                        let nameVarietyResults = WineCatalog.shared.search(query: "\(parts[0]) \(entryVariety)", limit: 1)
-                        if let catalogWine = nameVarietyResults.first {
-                            return createWineFromCatalog(catalogWine)
-                        }
-                    }
-
-                    // Try just the winery name (before the comma) + variety
-                    let wineryQuery = variety != nil ? "\(parts[0]) \(variety!)" : parts[0]
-                    let wineryResults = WineCatalog.shared.search(query: wineryQuery, limit: 1)
-                    if let catalogWine = wineryResults.first {
-                        // When the menu named a grape, a bare-name hit must agree on
-                        // variety — fantasy names otherwise match unrelated wines
-                        // (e.g. "ARTESANO" → a Portuguese Alicante Bouschet)
-                        let matchVariety = catalogWine.variety?.lowercased() ?? ""
-                        if entryVariety == nil || matchVariety.contains(entryVariety!) || entryVariety!.contains(matchVariety) {
-                            return createWineFromCatalog(catalogWine)
-                        }
-                    }
-                }
-            }
         }
 
         return nil

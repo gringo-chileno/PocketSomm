@@ -27,6 +27,7 @@
 		A1000013000000000000013 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000013000000000000013 /* AppSettings.swift */; };
 		A1000014000000000000014 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B1000014000000000000014 /* SettingsView.swift */; };
 		DF25C5E52F6B7CB80031D317 /* VivinoService.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF25C5E42F6B7CB80031D317 /* VivinoService.swift */; };
+		DF25C5E62F6B7CB80031D318 /* MenuScanEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF25C5E72F6B7CB80031D319 /* MenuScanEngine.swift */; };
 		DF3EF3632F2E47D600340A2D /* VivinoImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3EF3622F2E47D600340A2D /* VivinoImportView.swift */; };
 		DF3EF36A2F2E4E6500340A2D /* WineBottleImage.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3EF3682F2E4E6500340A2D /* WineBottleImage.swift */; };
 		DF3EF36D2F2E800C00340A2D /* WineDataImportView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DF3EF36C2F2E800C00340A2D /* WineDataImportView.swift */; };
@@ -61,6 +62,7 @@
 		B1000014000000000000014 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C1000001000000000000001 /* PocketSomm.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PocketSomm.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DF25C5E42F6B7CB80031D317 /* VivinoService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoService.swift; sourceTree = "<group>"; };
+		DF25C5E72F6B7CB80031D319 /* MenuScanEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuScanEngine.swift; sourceTree = "<group>"; };
 		DF3EF3622F2E47D600340A2D /* VivinoImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoImportView.swift; sourceTree = "<group>"; };
 		DF3EF3662F2E4E5B00340A2D /* VivinoImportView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VivinoImportView.swift; sourceTree = "<group>"; };
 		DF3EF3682F2E4E6500340A2D /* WineBottleImage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WineBottleImage.swift; sourceTree = "<group>"; };
@@ -161,6 +163,7 @@
 			isa = PBXGroup;
 			children = (
 				DF25C5E42F6B7CB80031D317 /* VivinoService.swift */,
+				DF25C5E72F6B7CB80031D319 /* MenuScanEngine.swift */,
 				DF3EF36F2F2E887900340A2D /* WineCatalog.swift */,
 				B100000E00000000000000E /* UserPreferences.swift */,
 				B100000F00000000000000F /* WineDataImporter.swift */,
@@ -255,6 +258,7 @@
 				A1000004000000000000004 /* Wine.swift in Sources */,
 				A1000005000000000000005 /* UserRating.swift in Sources */,
 				DF25C5E52F6B7CB80031D317 /* VivinoService.swift in Sources */,
+				DF25C5E62F6B7CB80031D318 /* MenuScanEngine.swift in Sources */,
 				DF3EF36D2F2E800C00340A2D /* WineDataImportView.swift in Sources */,
 				DF3EF36E2F2E800C00340A2D /* AddWineView.swift in Sources */,
 				A1000006000000000000006 /* ScanHistory.swift in Sources */,
