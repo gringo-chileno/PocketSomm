@@ -27,3 +27,4 @@ fastlane/screenshots/**/*.png
 !*.xcconfig.template
 Secrets.swift
 scripts/vivino_data/
+__pycache__/
