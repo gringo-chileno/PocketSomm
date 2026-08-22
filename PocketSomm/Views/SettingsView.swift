@@ -123,6 +123,17 @@ struct SettingsView: View {
                             .font(.nyBody)
                             .foregroundColor(.secondary)
                     }
+
+                    Link(destination: URL(string: "https://github.com/rogerioxavier/X-Wines")!) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("Catalog based on the X-Wines dataset")
+                                .font(.nyBody)
+                                .foregroundColor(.primary)
+                            Text("de Azambuja, Morais & Filipe, 2023 (CC0)")
+                                .font(.nyCaption)
+                                .foregroundColor(.secondary)
+                        }
+                    }
                 } header: {
                     Text("About")
                         .font(.nyCaption)
