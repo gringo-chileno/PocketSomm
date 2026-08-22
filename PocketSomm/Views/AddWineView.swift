@@ -48,7 +48,11 @@ struct AddWineView: View {
     }
 
     private var frequentRegions: [String] {
-        let wines = allRatings.compactMap { $0.wine?.region }
+        // Only regions from the selected country — rating history is mostly
+        // one country, and its regions are wrong for any other
+        let wines = allRatings.compactMap { $0.wine }
+            .filter { country.isEmpty || $0.country == country }
+            .compactMap { $0.region }
         return topValues(from: wines)
     }
 

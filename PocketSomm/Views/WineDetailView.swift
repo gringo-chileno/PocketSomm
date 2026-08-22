@@ -618,7 +618,11 @@ struct EditWineView: View {
     }
 
     private var frequentRegions: [String] {
-        let values = allRatings.compactMap { $0.wine?.region }
+        // Only regions from the selected country — rating history is mostly
+        // one country, and its regions are wrong for any other
+        let values = allRatings.compactMap { $0.wine }
+            .filter { country.isEmpty || $0.country == country }
+            .compactMap { $0.region }
         return topValues(from: values)
     }
 
@@ -919,10 +923,13 @@ struct SearchablePickerView: View {
     }
 
     private var filteredFrequent: [String] {
+        // Never offer a frequent value that isn't in the current option list
+        // (e.g. a Chilean region while the country is set to Argentina)
+        let valid = frequentOptions.filter { options.contains($0) }
         if searchText.isEmpty {
-            return frequentOptions
+            return valid
         }
-        return frequentOptions.filter { $0.localizedCaseInsensitiveContains(searchText) }
+        return valid.filter { $0.localizedCaseInsensitiveContains(searchText) }
     }
 
     var body: some View {
