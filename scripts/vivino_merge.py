@@ -77,6 +77,10 @@ def main():
                     rating = w.get("rating") or None
                     if rating is not None and not (1 <= rating <= 5):
                         rating = None
+                    # A rating built from a handful of opinions isn't a rating —
+                    # keep the wine for menu matching, show a dash in the app
+                    if (w.get("ratings_count") or 0) < 5:
+                        rating = None
                     cur.execute(
                         "INSERT INTO wines (name, winery, variety, region, country,"
                         " vintage, rating, price, type, body, acidity, food_pairings)"
