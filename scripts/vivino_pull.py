@@ -12,6 +12,7 @@ Usage: python3 vivino_pull.py cl ar
 """
 
 import json
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -32,11 +33,21 @@ MAX_CONSECUTIVE_FAILURES = 10
 
 
 def get_json(url, consecutive_failures=[0]):
+    # curl subprocess instead of urllib: a long-lived python process wedges in
+    # SSL waits after Mac sleep/wake; a fresh curl per request cannot, and the
+    # subprocess timeout hard-caps any hang
     for attempt in range(MAX_RETRIES):
         try:
-            req = urllib.request.Request(url, headers=HEADERS)
-            with urllib.request.urlopen(req, timeout=30) as resp:
-                data = json.load(resp)
+            r = subprocess.run(
+                ["curl", "-s", "--fail", "--max-time", "30",
+                 "-A", HEADERS["User-Agent"],
+                 "-H", "Accept: application/json",
+                 "-H", "Accept-Language: en-US,en;q=0.9",
+                 url],
+                capture_output=True, timeout=40)
+            if r.returncode != 0:
+                raise RuntimeError(f"curl exit {r.returncode}")
+            data = json.loads(r.stdout)
             consecutive_failures[0] = 0
             time.sleep(DELAY)
             return data
@@ -109,17 +120,12 @@ def fetch_wines(cc, wineries):
         for i, w in enumerate(wineries):
             if w["id"] in done:
                 continue
-            wines = []
-            page = 1
-            while True:
-                d = get_json(f"{BASE}/wineries/{w['id']}/wines?page={page}&per_page=50")
-                if d is None:
-                    break
-                batch = d.get("wines") or []
-                wines.extend(batch)
-                if len(batch) < 50:
-                    break
-                page += 1
+            # One request per winery: the endpoint ignores its page parameter
+            # (every page returns the same rows) but honors big per_page values
+            d = get_json(f"{BASE}/wineries/{w['id']}/wines?per_page=1000")
+            wines = (d.get("wines") or []) if d else []
+            if len(wines) == 1000:
+                print(f"  warning: {w['name']} may exceed the 1000-wine request cap", flush=True)
             slim = []
             for x in wines:
                 stats = x.get("statistics") or {}
