@@ -73,7 +73,10 @@ def fetch_wineries(cc):
     wineries = {}
     page = 1
     expected = None
-    while True:
+    # The listing refuses pages past 400 (top 10,000 wineries per country,
+    # ordered by total ratings) — deeper wineries are unreachable this way
+    MAX_PAGES = 400
+    while page <= MAX_PAGES:
         qs = urllib.parse.urlencode({"country_codes[]": cc, "page": page})
         d = get_json(f"{BASE}/wineries?{qs}")
         if d is None:
