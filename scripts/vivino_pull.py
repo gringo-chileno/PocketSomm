@@ -41,8 +41,8 @@ def get_json(url, consecutive_failures=[0]):
             time.sleep(DELAY)
             return data
         except Exception as e:
-            wait = 60 * (attempt + 1)
-            print(f"  error on {url}: {e} — retry in {wait}s", flush=True)
+            wait = 15 * (attempt + 1)
+            print(f"  error on {url}: {e} - retry in {wait}s", flush=True)
             time.sleep(wait)
     consecutive_failures[0] += 1
     if consecutive_failures[0] >= MAX_CONSECUTIVE_FAILURES:
