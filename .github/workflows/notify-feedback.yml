@@ -1,0 +1,21 @@
+name: Notify on feedback
+
+# Feedback issues are created by the owner's own token, so GitHub suppresses
+# notifications for them. Having the Actions bot assign the issue makes a real
+# notification (and email) reach the owner.
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  issues: write
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh issue edit "$NUMBER" --repo "$REPO" --add-assignee gringo-chileno
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NUMBER: ${{ github.event.issue.number }}
+          REPO: ${{ github.repository }}
