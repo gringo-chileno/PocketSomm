@@ -110,7 +110,7 @@ struct SettingsView: View {
                         Text("Version")
                             .font(.nyBody)
                         Spacer()
-                        Text("1.0.1")
+                        Text(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0")
                             .font(.nyBody)
                             .foregroundColor(.secondary)
                     }

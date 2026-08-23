@@ -145,50 +145,6 @@ struct ScanResultsView: View {
                 isLoading = false
             }
 
-            // Fire off Vivino lookups for unmatched wines in background
-            let unmatched = matches
-                .filter { $0.matchedWine == nil }
-                .map { ($0.id, $0.detectedName) }
-
-            for (matchID, detectedName) in unmatched {
-                let results = await VivinoService.shared.search(query: detectedName, limit: 1)
-                if let vivinoWine = results.first {
-                    await MainActor.run {
-                        // Reuse an existing wine — reopening a past scan reran
-                        // this and inserted a duplicate every time
-                        let name = vivinoWine.name
-                        let winery = vivinoWine.winery
-                        let descriptor = FetchDescriptor<Wine>(
-                            predicate: #Predicate<Wine> { wine in
-                                wine.name == name && wine.winery == winery
-                            }
-                        )
-                        let wine: Wine
-                        if let existing = try? modelContext.fetch(descriptor).first {
-                            wine = existing
-                        } else {
-                            wine = Wine(
-                                name: vivinoWine.name,
-                                region: vivinoWine.region,
-                                winery: vivinoWine.winery,
-                                country: vivinoWine.country,
-                                vivinoRating: vivinoWine.rating,
-                                vivinoRatingsCount: vivinoWine.ratingsCount,
-                                vivinoURL: vivinoWine.vivinoURL,
-                                vivinoImageURL: vivinoWine.imageURL
-                            )
-                            modelContext.insert(wine)
-                            try? modelContext.save()
-                        }
-                        // Look the row up by id — a concurrent reload can
-                        // reorder wineMatches, so positional indices go stale
-                        if let idx = wineMatches.firstIndex(where: { $0.id == matchID }) {
-                            wineMatches[idx].matchedWine = wine
-                            wineMatches[idx].predictedScore = preferences.predictScore(for: wine)
-                        }
-                    }
-                }
-            }
         }
     }
 

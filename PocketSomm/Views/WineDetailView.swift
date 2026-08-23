@@ -18,7 +18,6 @@ struct WineDetailView: View {
     @State private var isNewRating = false
     @State private var showingEditWine = false
     @State private var showingDeleteConfirmation = false
-    @State private var isLoadingVivino = false
 
     private var existingRating: UserRating? {
         wine.userRatings?.sorted { $0.dateRated > $1.dateRated }.first
@@ -274,10 +273,6 @@ struct WineDetailView: View {
                         Text("Community Rating")
                             .font(.nyHeadline)
                         Spacer()
-                        if isLoadingVivino {
-                            ProgressView()
-                                .scaleEffect(0.8)
-                        }
                     }
 
                     if let vivinoRating = wine.vivinoRating, vivinoRating > 0 {
@@ -325,7 +320,7 @@ struct WineDetailView: View {
                         Text("Catalog rating")
                             .font(.nyCaption)
                             .foregroundColor(.secondary)
-                    } else if !isLoadingVivino {
+                    } else {
                         Text("—")
                             .font(.nyTitle2)
                             .foregroundColor(.secondary)
@@ -342,12 +337,6 @@ struct WineDetailView: View {
         .onAppear {
             // Initialize vintage from wine's default
             editedVintage = wine.vintage
-        }
-        .task {
-            // Fetch Vivino rating in background if we don't have one cached
-            if wine.vivinoRating == nil {
-                await fetchVivinoRating()
-            }
         }
         .overlay {
             if showingSaveConfirmation {
@@ -407,32 +396,6 @@ struct WineDetailView: View {
         return items.isEmpty ? nil : items
     }
 
-    private func fetchVivinoRating() async {
-        // Build search query from wine name + winery
-        var query = wine.name
-        if let winery = wine.winery, !winery.isEmpty {
-            query = "\(winery) \(query)"
-        }
-
-        isLoadingVivino = true
-        let results = await VivinoService.shared.search(query: query, limit: 3)
-        isLoadingVivino = false
-
-        // Find best match — prefer exact winery match
-        let match = results.first { result in
-            guard let winery = wine.winery else { return true }
-            return result.winery.localizedCaseInsensitiveContains(winery)
-                || winery.localizedCaseInsensitiveContains(result.winery)
-        } ?? results.first
-
-        if let match = match {
-            wine.vivinoRating = match.rating
-            wine.vivinoRatingsCount = match.ratingsCount
-            wine.vivinoURL = match.vivinoURL
-            wine.vivinoImageURL = match.imageURL
-            try? modelContext.save()
-        }
-    }
 
     private func saveRating() {
         if !isNewRating, let existing = existingRating {
