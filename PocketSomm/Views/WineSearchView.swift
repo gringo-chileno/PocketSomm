@@ -10,6 +10,12 @@ struct WineSearchView: View {
     @State private var catalogResults: [CatalogWine] = []
     @State private var userWineResults: [Wine] = []
     @State private var vivinoResults: [VivinoWine] = []
+
+    // One pass over saved wines instead of a SwiftData fetch per result row
+    @Query private var savedWines: [Wine]
+    private var ratedWineNames: Set<String> {
+        Set(savedWines.filter { $0.userRatings?.isEmpty == false }.map { $0.name })
+    }
     @State private var isSearching = false
     @State private var isSearchingVivino = false
     @State private var shouldDismiss = false
@@ -66,7 +72,8 @@ struct WineSearchView: View {
                                     Button {
                                         selectWine(catalogWine)
                                     } label: {
-                                        CatalogWineRowView(wine: catalogWine, modelContext: modelContext)
+                                        CatalogWineRowView(wine: catalogWine,
+                                                           hasUserRating: ratedWineNames.contains(catalogWine.name))
                                     }
                                 }
                             } header: {
@@ -80,7 +87,7 @@ struct WineSearchView: View {
                         // Vivino results section
                         if !vivinoResults.isEmpty {
                             Section {
-                                ForEach(vivinoResults, id: \.name) { vivinoWine in
+                                ForEach(Array(vivinoResults.enumerated()), id: \.offset) { _, vivinoWine in
                                     Button {
                                         selectVivinoWine(vivinoWine)
                                     } label: {
@@ -152,7 +159,7 @@ struct WineSearchView: View {
                     pendingWine = nil
                 }
             }) {
-                AddWineView(initialWinery: searchText) { wine in
+                AddWineView(initialName: searchText) { wine in
                     pendingWine = wine
                 }
             }
@@ -213,7 +220,19 @@ struct WineSearchView: View {
     }
 
     private func selectVivinoWine(_ vivinoWine: VivinoWine) {
-        // Create a Wine from Vivino data
+        // Reuse an existing wine — picking the same result twice used to
+        // insert a duplicate row
+        let name = vivinoWine.name
+        let winery = vivinoWine.winery
+        let descriptor = FetchDescriptor<Wine>(
+            predicate: #Predicate<Wine> { wine in
+                wine.name == name && wine.winery == winery
+            }
+        )
+        if let existing = try? modelContext.fetch(descriptor).first {
+            selectedWine = existing
+            return
+        }
         let wine = Wine(
             name: vivinoWine.name,
             region: vivinoWine.region,
@@ -393,21 +412,7 @@ struct WineSearchView: View {
 
 struct CatalogWineRowView: View {
     let wine: CatalogWine
-    let modelContext: ModelContext
-
-    // Check if user has rated this wine
-    private var hasUserRating: Bool {
-        let name = wine.name
-        let descriptor = FetchDescriptor<Wine>(
-            predicate: #Predicate<Wine> { w in
-                w.name == name
-            }
-        )
-        if let existing = try? modelContext.fetch(descriptor).first {
-            return existing.userRatings?.isEmpty == false
-        }
-        return false
-    }
+    let hasUserRating: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {

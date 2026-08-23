@@ -58,7 +58,7 @@ struct ScanResultsView: View {
                             .padding(.horizontal)
 
                         ForEach(wineMatches.filter { !$0.isTopPick }) { match in
-                            WineMatchCard(match: match, allRatings: allRatings, onRatingSaved: { shouldDismiss = true })
+                            WineMatchCard(match: match, onRatingSaved: { shouldDismiss = true })
                         }
                     }
                 }
@@ -90,23 +90,29 @@ struct ScanResultsView: View {
         Task {
             let preferences = UserPreferences.calculate(from: Array(allRatings))
 
-            // Create matches from detected wine names
-            var matches: [WineMatch] = []
-
-            for entry in scan.detectedWineNames {
-                // Parse variety context if encoded (format: "name\tvariety")
+            // Parse variety context if encoded (format: "name\tvariety")
+            let entries: [(name: String, variety: String?)] = scan.detectedWineNames.map { entry in
                 let parts = entry.components(separatedBy: MenuScanEngine.varietySeparator)
-                let name = parts[0]
-                let variety = parts.count > 1 ? parts[1] : nil
+                return (parts[0], parts.count > 1 ? parts[1] : nil)
+            }
 
-                var match = WineMatch(detectedName: name)
+            // Catalog matching is the expensive part (several LIKE scans per
+            // entry) — run it off the main thread; SwiftData stays on main
+            let catalogMatches = await Task.detached(priority: .userInitiated) {
+                entries.map { MenuScanEngine.findCatalogMatch(for: $0.name, variety: $0.variety) }
+            }.value
 
-                // Try to find matching wine in database
-                if let matchedWine = findWineMatch(for: name, variety: variety) {
-                    match.matchedWine = matchedWine
-                    match.predictedScore = preferences.predictScore(for: matchedWine)
+            var matches: [WineMatch] = []
+            for (i, entry) in entries.enumerated() {
+                var match = WineMatch(detectedName: entry.name)
+                if let existing = findExistingWine(for: entry.name) {
+                    match.matchedWine = existing
+                    match.predictedScore = preferences.predictScore(for: existing)
+                } else if let catalogWine = catalogMatches[i] {
+                    let wine = createWineFromCatalog(catalogWine)
+                    match.matchedWine = wine
+                    match.predictedScore = preferences.predictScore(for: wine)
                 }
-
                 matches.append(match)
             }
 
@@ -140,29 +146,45 @@ struct ScanResultsView: View {
             }
 
             // Fire off Vivino lookups for unmatched wines in background
-            let unmatchedIndices = matches.enumerated()
-                .filter { $0.element.matchedWine == nil }
-                .map { ($0.offset, $0.element.detectedName) }
+            let unmatched = matches
+                .filter { $0.matchedWine == nil }
+                .map { ($0.id, $0.detectedName) }
 
-            for (index, detectedName) in unmatchedIndices {
+            for (matchID, detectedName) in unmatched {
                 let results = await VivinoService.shared.search(query: detectedName, limit: 1)
                 if let vivinoWine = results.first {
-                    let wine = Wine(
-                        name: vivinoWine.name,
-                        region: vivinoWine.region,
-                        winery: vivinoWine.winery,
-                        country: vivinoWine.country,
-                        vivinoRating: vivinoWine.rating,
-                        vivinoRatingsCount: vivinoWine.ratingsCount,
-                        vivinoURL: vivinoWine.vivinoURL,
-                        vivinoImageURL: vivinoWine.imageURL
-                    )
                     await MainActor.run {
-                        modelContext.insert(wine)
-                        try? modelContext.save()
-                        if index < wineMatches.count {
-                            wineMatches[index].matchedWine = wine
-                            wineMatches[index].predictedScore = preferences.predictScore(for: wine)
+                        // Reuse an existing wine — reopening a past scan reran
+                        // this and inserted a duplicate every time
+                        let name = vivinoWine.name
+                        let winery = vivinoWine.winery
+                        let descriptor = FetchDescriptor<Wine>(
+                            predicate: #Predicate<Wine> { wine in
+                                wine.name == name && wine.winery == winery
+                            }
+                        )
+                        let wine: Wine
+                        if let existing = try? modelContext.fetch(descriptor).first {
+                            wine = existing
+                        } else {
+                            wine = Wine(
+                                name: vivinoWine.name,
+                                region: vivinoWine.region,
+                                winery: vivinoWine.winery,
+                                country: vivinoWine.country,
+                                vivinoRating: vivinoWine.rating,
+                                vivinoRatingsCount: vivinoWine.ratingsCount,
+                                vivinoURL: vivinoWine.vivinoURL,
+                                vivinoImageURL: vivinoWine.imageURL
+                            )
+                            modelContext.insert(wine)
+                            try? modelContext.save()
+                        }
+                        // Look the row up by id — a concurrent reload can
+                        // reorder wineMatches, so positional indices go stale
+                        if let idx = wineMatches.firstIndex(where: { $0.id == matchID }) {
+                            wineMatches[idx].matchedWine = wine
+                            wineMatches[idx].predictedScore = preferences.predictScore(for: wine)
                         }
                     }
                 }
@@ -170,31 +192,14 @@ struct ScanResultsView: View {
         }
     }
 
-    private func findWineMatch(for name: String, variety: String? = nil) -> Wine? {
-        // First check if already matched in SwiftData
-        if let matched = scan.matchedWines?.first(where: {
-            $0.name.localizedCaseInsensitiveContains(name) ||
-            name.localizedCaseInsensitiveContains($0.name)
-        }) {
-            return matched
-        }
-
-        // Check SwiftData for existing wine
+    private func findExistingWine(for name: String) -> Wine? {
+        // Wine already saved in SwiftData (rated, or created by a past scan)
         let descriptor = FetchDescriptor<Wine>(
             predicate: #Predicate<Wine> { wine in
                 wine.name.localizedStandardContains(name)
             }
         )
-        if let existing = try? modelContext.fetch(descriptor).first {
-            return existing
-        }
-
-        // Catalog search (extraction formats + fallbacks live in MenuScanEngine)
-        if let catalogWine = MenuScanEngine.findCatalogMatch(for: name, variety: variety) {
-            return createWineFromCatalog(catalogWine)
-        }
-
-        return nil
+        return try? modelContext.fetch(descriptor).first
     }
 
     private func createWineFromCatalog(_ catalog: CatalogWine) -> Wine {
@@ -340,7 +345,6 @@ struct TopPickCard: View {
 
 struct WineMatchCard: View {
     let match: ScanResultsView.WineMatch
-    let allRatings: [UserRating]
     var onRatingSaved: (() -> Void)?
 
     var body: some View {

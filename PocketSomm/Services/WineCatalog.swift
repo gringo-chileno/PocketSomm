@@ -40,9 +40,14 @@ class WineCatalog {
     static let shared = WineCatalog()
 
     private var db: OpaquePointer?
-    private let queue = DispatchQueue(label: "wine.catalog.queue", attributes: .concurrent)
+    // Serial: Apple's sqlite ships THREADSAFE=2 (no per-connection mutex), so
+    // two threads inside the same connection is undefined behavior
+    private let queue = DispatchQueue(label: "wine.catalog.queue")
     // Cached set of known winery names (lowercased, accent-folded) for O(1) lookup
     private var knownWineries: Set<String> = []
+    // The catalog is read-only, so distinct-value lists never change — cache
+    // them; the pickers otherwise re-query on every sheet render
+    private var distinctCache: [String: [String]] = [:]
 
     var totalWines: Int {
         var count = 0
@@ -165,84 +170,8 @@ class WineCatalog {
         return results
     }
 
-    func findWine(byName name: String) -> CatalogWine? {
-        var result: CatalogWine?
 
-        queue.sync {
-            let sql = """
-                SELECT id, name, winery, variety, region, country, vintage, rating, price, type, body, acidity, food_pairings
-                FROM wines
-                WHERE LOWER(name) LIKE ?
-                LIMIT 1
-            """
 
-            var statement: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
-                let likeName = "%\(name.lowercased())%"
-                sqlite3_bind_text(statement, 1, likeName, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-
-                if sqlite3_step(statement) == SQLITE_ROW {
-                    result = wineFromStatement(statement)
-                }
-            }
-            sqlite3_finalize(statement)
-        }
-
-        return result
-    }
-
-    func getWine(byId id: Int64) -> CatalogWine? {
-        var result: CatalogWine?
-
-        queue.sync {
-            let sql = """
-                SELECT id, name, winery, variety, region, country, vintage, rating, price, type, body, acidity, food_pairings
-                FROM wines
-                WHERE id = ?
-            """
-
-            var statement: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
-                sqlite3_bind_int64(statement, 1, id)
-
-                if sqlite3_step(statement) == SQLITE_ROW {
-                    result = wineFromStatement(statement)
-                }
-            }
-            sqlite3_finalize(statement)
-        }
-
-        return result
-    }
-
-    func winesByCountry(_ country: String, limit: Int = 100) -> [CatalogWine] {
-        var results: [CatalogWine] = []
-
-        queue.sync {
-            let sql = """
-                SELECT id, name, winery, variety, region, country, vintage, rating, price, type, body, acidity, food_pairings
-                FROM wines
-                WHERE country = ?
-                ORDER BY rating DESC
-                LIMIT ?
-            """
-
-            var statement: OpaquePointer?
-            if sqlite3_prepare_v2(db, sql, -1, &statement, nil) == SQLITE_OK {
-                sqlite3_bind_text(statement, 1, country, -1, unsafeBitCast(-1, to: sqlite3_destructor_type.self))
-                sqlite3_bind_int(statement, 2, Int32(limit))
-
-                while sqlite3_step(statement) == SQLITE_ROW {
-                    if let wine = wineFromStatement(statement) {
-                        results.append(wine)
-                    }
-                }
-            }
-            sqlite3_finalize(statement)
-        }
-
-        return results
-    }
 
     private func wineFromStatement(_ statement: OpaquePointer?) -> CatalogWine? {
         guard let statement = statement else { return nil }
@@ -298,6 +227,10 @@ class WineCatalog {
     }
 
     func distinctRegions(forCountry country: String, limit: Int = 300) -> [String] {
+        let cacheKey = "region-\(country)-\(limit)"
+        if let cached = queue.sync(execute: { distinctCache[cacheKey] }) {
+            return cached
+        }
         var results: [String] = []
 
         queue.sync {
@@ -321,6 +254,7 @@ class WineCatalog {
                 }
             }
             sqlite3_finalize(statement)
+            distinctCache[cacheKey] = results
         }
 
         return results
@@ -337,6 +271,10 @@ class WineCatalog {
     }
 
     private func distinctValues(column: String, limit: Int) -> [String] {
+        let cacheKey = "\(column)-\(limit)"
+        if let cached = queue.sync(execute: { distinctCache[cacheKey] }) {
+            return cached
+        }
         var results: [String] = []
 
         queue.sync {
@@ -359,6 +297,7 @@ class WineCatalog {
                 }
             }
             sqlite3_finalize(statement)
+            distinctCache[cacheKey] = results
         }
 
         return results

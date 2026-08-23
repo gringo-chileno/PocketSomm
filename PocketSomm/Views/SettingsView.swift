@@ -189,7 +189,13 @@ struct SettingsView: View {
             .sheet(isPresented: $showingFeedback) {
                 FeedbackView()
             }
-            .sheet(isPresented: $showingExport) {
+            .sheet(isPresented: $showingExport, onDismiss: {
+                // Don't leave the exported CSV sitting in tmp
+                if let url = csvURL {
+                    try? FileManager.default.removeItem(at: url)
+                    csvURL = nil
+                }
+            }) {
                 if let url = csvURL {
                     ShareSheet(items: [url])
                 }

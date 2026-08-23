@@ -416,6 +416,16 @@ enum MenuScanEngine {
     }
 
     static func findCatalogMatch(for rawName: String, variety: String? = nil) -> CatalogWine? {
+        // search() ANDs terms order-independently, so two queries with the same
+        // word set return identical results — never run the same set twice
+        var triedTermSets = Set<Set<String>>()
+        func attempt(_ query: String) -> CatalogWine? {
+            let terms = Set(fold(query).components(separatedBy: .whitespaces).filter { !$0.isEmpty })
+            guard !terms.isEmpty, !triedTermSets.contains(terms) else { return nil }
+            triedTermSets.insert(terms)
+            return bestMatch(query: query)
+        }
+
         // Vintage years never match the searchable columns (vintage isn't
         // searched), so a year in the query guarantees a miss — drop them
         let name = rawName.replacingOccurrences(
@@ -426,7 +436,7 @@ enum MenuScanEngine {
         let searchQuery = variety != nil ? "\(cleanedName) \(variety!)" : cleanedName
 
         // Search the catalog with full detected name (+ variety context)
-        if let catalogWine = bestMatch(query: searchQuery) {
+        if let catalogWine = attempt(searchQuery) {
             return catalogWine
         }
 
@@ -453,21 +463,21 @@ enum MenuScanEngine {
                     // Winery detail + variety first — region words in the query
                     // often LIKE-match unrelated wineries ("del" → "Casas del …")
                     let wineryOnly = "\(parts[1]) \(parts[0])"
-                    if let catalogWine = bestMatch(query: wineryOnly) {
+                    if let catalogWine = attempt(wineryOnly) {
                         return catalogWine
                     }
 
                     // Then the full remainder including region
                     let wineryAndRegion = Array(parts[1...]).joined(separator: " ")
                     let queryWithVariety = "\(wineryAndRegion) \(parts[0])"
-                    if let catalogWine = bestMatch(query: queryWithVariety) {
+                    if let catalogWine = attempt(queryWithVariety) {
                         return catalogWine
                     }
                 } else {
                     // Format A: "Winery, Wine Name"
                     let reordered = (Array(parts[1...]) + [parts[0]]).joined(separator: " ")
                     let reorderedQuery = variety != nil ? "\(reordered) \(variety!)" : reordered
-                    if let catalogWine = bestMatch(query: reorderedQuery) {
+                    if let catalogWine = attempt(reorderedQuery) {
                         return catalogWine
                     }
 
@@ -484,7 +494,7 @@ enum MenuScanEngine {
                         return sortedVarieties.first { lower.contains(" \($0) ") }
                     }.first
                     if let entryVariety {
-                        if let catalogWine = bestMatch(query: "\(parts[0]) \(entryVariety)") {
+                        if let catalogWine = attempt("\(parts[0]) \(entryVariety)") {
                             return catalogWine
                         }
                     }
@@ -496,7 +506,7 @@ enum MenuScanEngine {
                     // cover anything actually in the catalog
                     if parts.count == 2 {
                         let wineryQuery = variety != nil ? "\(parts[0]) \(variety!)" : parts[0]
-                        if let catalogWine = bestMatch(query: wineryQuery) {
+                        if let catalogWine = attempt(wineryQuery) {
                             // A bare-name hit must agree on the grape when known
                             let matchVariety = catalogWine.variety?.lowercased() ?? ""
                             if entryVariety == nil || matchVariety.contains(entryVariety!) || entryVariety!.contains(matchVariety) {

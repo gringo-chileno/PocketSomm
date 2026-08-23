@@ -289,34 +289,52 @@ struct VivinoImportView: View {
                     errors.append("\(wineName) - no rating value")
                 }
             } else {
-                // Wine not in catalog — add it directly from CSV data
+                // Wine not in catalog — add it directly from CSV data,
+                // reusing an existing row so re-imports don't duplicate
                 if let ratingValue = rating, ratingValue > 0 {
-                    let wine = Wine(
-                        name: wineName,
-                        vintage: vintage,
-                        region: nil,
-                        grapeVariety: nil,
-                        averageRating: nil,
-                        winery: winery,
-                        country: country,
-                        priceUSD: nil,
-                        wineType: nil,
-                        body: nil,
-                        acidity: nil,
-                        foodPairings: nil
+                    let existingDescriptor = FetchDescriptor<Wine>(
+                        predicate: #Predicate<Wine> { w in
+                            w.name == wineName && w.winery == winery
+                        }
                     )
-                    modelContext.insert(wine)
-                    addedWines += 1
+                    let wine: Wine
+                    if let existing = try? modelContext.fetch(existingDescriptor).first {
+                        wine = existing
+                    } else {
+                        wine = Wine(
+                            name: wineName,
+                            vintage: vintage,
+                            region: nil,
+                            grapeVariety: nil,
+                            averageRating: nil,
+                            winery: winery,
+                            country: country,
+                            priceUSD: nil,
+                            wineType: nil,
+                            body: nil,
+                            acidity: nil,
+                            foodPairings: nil
+                        )
+                        modelContext.insert(wine)
+                        addedWines += 1
+                    }
 
-                    let userRating = UserRating(
-                        wine: wine,
-                        rating: min(5.0, ratingValue),
-                        notes: "Imported",
-                        vintage: vintage
-                    )
-                    modelContext.insert(userRating)
-                    wine.userRatings = [userRating]
-                    importedRatings += 1
+                    let isDuplicate = wine.userRatings?.contains {
+                        $0.rating == min(5.0, ratingValue) && $0.vintage == vintage
+                    } ?? false
+                    if isDuplicate {
+                        skippedDuplicates += 1
+                    } else {
+                        let userRating = UserRating(
+                            wine: wine,
+                            rating: min(5.0, ratingValue),
+                            notes: "Imported",
+                            vintage: vintage
+                        )
+                        modelContext.insert(userRating)
+                        wine.userRatings = (wine.userRatings ?? []) + [userRating]
+                        importedRatings += 1
+                    }
                 }
             }
         }

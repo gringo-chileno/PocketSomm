@@ -19,6 +19,13 @@ struct PocketSommApp: App {
             fatalError("Could not create ModelContainer: \(error)")
         }
 
+        // Warm the catalog off the main thread — its first touch (opening the
+        // 65MB database and caching 48K winery names) costs ~300-600ms and
+        // otherwise lands on whichever sheet the user opens first
+        Task.detached(priority: .utility) {
+            _ = WineCatalog.shared.totalWines
+        }
+
         // Configure New York font for navigation bars
         let nyFont = UIFont(descriptor: UIFontDescriptor.preferredFontDescriptor(withTextStyle: .largeTitle).withDesign(.serif)!, size: 34)
         let nyInlineFont = UIFont(descriptor: UIFontDescriptor.preferredFontDescriptor(withTextStyle: .headline).withDesign(.serif)!, size: 17)

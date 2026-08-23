@@ -4,7 +4,9 @@ import SwiftData
 @Model
 final class ScanHistory {
     var date: Date
-    var photoData: Data?
+    // Photos live outside the SwiftData store file so history queries don't
+    // drag multi-MB blobs into memory
+    @Attribute(.externalStorage) var photoData: Data?
     var detectedWineNames: [String]
 
     @Relationship

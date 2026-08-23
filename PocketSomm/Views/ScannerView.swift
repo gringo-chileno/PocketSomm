@@ -148,19 +148,24 @@ struct ScannerView: View {
 
         Task {
             let texts = await recognizeText(in: image)
-            let wineNames = extractWineNames(from: texts)
+            // OCR line filtering + winery lookups run off the main thread —
+            // views are MainActor, so Task {} here would otherwise freeze the UI
+            let wineNames = await Task.detached(priority: .userInitiated) {
+                MenuScanEngine.extractWineNames(from: texts)
+            }.value
+            // Store a downscaled photo: full camera resolution was ~2-6MB per
+            // scan inside the SwiftData store, decoded whole for 60pt thumbnails
+            let photoData = await Task.detached(priority: .userInitiated) {
+                image.downscaled(maxDimension: 1200).jpegData(compressionQuality: 0.7)
+            }.value
 
             await MainActor.run {
                 // Create scan history
                 let scan = ScanHistory(
                     date: Date(),
-                    photoData: image.jpegData(compressionQuality: 0.7),
+                    photoData: photoData,
                     detectedWineNames: wineNames
                 )
-
-                // Match wines from database
-                let matchedWines = matchWinesFromDatabase(names: wineNames)
-                scan.matchedWines = matchedWines
 
                 modelContext.insert(scan)
 
@@ -215,11 +220,14 @@ struct ScannerView: View {
             }
             let handler = VNImageRequestHandler(cgImage: cgImage, orientation: cgOrientation, options: [:])
 
-            do {
-                try handler.perform([request])
-            } catch {
-                print("Text recognition error: \(error)")
-                continuation.resume(returning: [])
+            // Vision's accurate OCR takes 1-3s — keep it off the main thread
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    try handler.perform([request])
+                } catch {
+                    print("Text recognition error: \(error)")
+                    continuation.resume(returning: [])
+                }
             }
         }
     }
@@ -231,23 +239,6 @@ struct ScannerView: View {
         MenuScanEngine.extractWineNames(from: texts)
     }
 
-    private func matchWinesFromDatabase(names: [String]) -> [Wine] {
-        var matchedWines: [Wine] = []
-
-        for name in names {
-            let descriptor = FetchDescriptor<Wine>(
-                predicate: #Predicate<Wine> { wine in
-                    wine.name.localizedStandardContains(name)
-                }
-            )
-
-            if let wines = try? modelContext.fetch(descriptor), let wine = wines.first {
-                matchedWines.append(wine)
-            }
-        }
-
-        return matchedWines
-    }
 }
 
 // MARK: - Camera View
@@ -291,4 +282,19 @@ struct CameraView: UIViewControllerRepresentable {
 #Preview {
     ScannerView()
         .modelContainer(for: [Wine.self, UserRating.self, ScanHistory.self], inMemory: true)
+}
+
+
+extension UIImage {
+    /// Longest side capped at maxDimension; returns self if already smaller
+    func downscaled(maxDimension: CGFloat) -> UIImage {
+        let largest = max(size.width, size.height)
+        guard largest > maxDimension else { return self }
+        let scaleFactor = maxDimension / largest
+        let newSize = CGSize(width: size.width * scaleFactor, height: size.height * scaleFactor)
+        let renderer = UIGraphicsImageRenderer(size: newSize)
+        return renderer.image { _ in
+            draw(in: CGRect(origin: .zero, size: newSize))
+        }
+    }
 }

@@ -112,6 +112,10 @@ struct FeedbackView: View {
                             : Color.wineRed
                     )
                     .foregroundColor(.white)
+                } footer: {
+                    Text("Feedback is posted publicly as an issue on the app's GitHub page.")
+                        .font(.nyCaption)
+                        .foregroundColor(.secondary)
                 }
             }
             .navigationTitle("Send Feedback")

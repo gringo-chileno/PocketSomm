@@ -73,7 +73,9 @@ struct ScanHistoryRowView: View {
                     .foregroundColor(.secondary)
 
                 if !scan.detectedWineNames.isEmpty {
-                    Text(scan.detectedWineNames.prefix(3).joined(separator: ", "))
+                    Text(scan.detectedWineNames.prefix(3).map {
+                        $0.components(separatedBy: MenuScanEngine.varietySeparator).first ?? $0
+                    }.joined(separator: ", ").localizedCapitalized)
                         .font(.nyCaption)
                         .foregroundColor(.secondary)
                         .lineLimit(1)

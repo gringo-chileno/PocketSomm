@@ -710,8 +710,13 @@ struct EditWineView: View {
                     frequentOptions: frequentCountries
                 )
             }
-            .onChange(of: country) { _, _ in
-                region = ""
+            .onChange(of: country) { oldValue, _ in
+                // Only clear region on a real country switch — onAppear's
+                // programmatic load ("" -> saved country) fires this too, and
+                // clearing then silently wiped the wine's region on save
+                if !oldValue.isEmpty {
+                    region = ""
+                }
             }
             .sheet(isPresented: $showingWineryPicker) {
                 SearchablePickerView(
