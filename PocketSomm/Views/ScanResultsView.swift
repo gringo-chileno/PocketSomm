@@ -348,8 +348,8 @@ struct WineMatchCard: View {
             if let wine = match.matchedWine {
                 NavigationLink(destination: WineDetailView(wine: wine, onRatingSaved: onRatingSaved)) {
                     VStack(alignment: .leading, spacing: 10) {
-                        // Detected Name
-                        Text(match.detectedName)
+                        // Matched wine name — not the raw ALL-CAPS OCR text
+                        Text(wine.displayName)
                             .font(.nyHeadline)
                             .foregroundColor(.primary)
 
@@ -435,9 +435,10 @@ struct WineMatchCard: View {
                 }
                 .buttonStyle(.plain)
             } else {
-                // No match found
-                Text(match.detectedName)
+                // No match found — title-case the OCR text and keep it short
+                Text(match.detectedName.localizedCapitalized)
                     .font(.nyHeadline)
+                    .lineLimit(2)
 
                 HStack {
                     Image(systemName: "questionmark.circle")

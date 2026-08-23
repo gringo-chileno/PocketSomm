@@ -90,17 +90,18 @@ def main():
                     # keep the wine for menu matching, show a dash in the app
                     if (w.get("ratings_count") or 0) < 5:
                         rating = None
+                    variety = w.get("variety") or infer_variety(name)
+                    region = w.get("region")
+                    country = w.get("country") or COUNTRY_NAME.get(cc)
+                    search_text = fold(" ".join(filter(None, [name, winery, variety, region, country])))
                     cur.execute(
                         "INSERT INTO wines (name, winery, variety, region, country,"
-                        " vintage, rating, price, type, body, acidity, food_pairings)"
-                        " VALUES (?,?,?,?,?,NULL,?,NULL,?,?,?,NULL)",
-                        (name, winery,
-                         w.get("variety") or infer_variety(name),
-                         w.get("region"),
-                         w.get("country") or COUNTRY_NAME.get(cc),
+                        " vintage, rating, price, type, body, acidity, food_pairings, search_text)"
+                        " VALUES (?,?,?,?,?,NULL,?,NULL,?,?,?,NULL,?)",
+                        (name, winery, variety, region, country,
                          rating,
                          TYPE_MAP.get(w.get("type_id")),
-                         w.get("body"), w.get("acidity")))
+                         w.get("body"), w.get("acidity"), search_text))
                     added += 1
     db.commit()
     total = cur.execute("SELECT COUNT(*) FROM wines").fetchone()[0]

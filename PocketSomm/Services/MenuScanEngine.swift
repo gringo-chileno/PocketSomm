@@ -202,9 +202,14 @@ enum MenuScanEngine {
                        (last.components(separatedBy: varietySeparator).first ?? last)
                            .caseInsensitiveCompare(header) == .orderedSame {
                         wineNames.removeLast()
+                        if sectionWineryEntryIndex == wineNames.count { sectionWineryEntryIndex = nil }
                     }
                     if !normalized.lowercased().hasPrefix(header.lowercased()) {
                         normalized = header + ", " + normalized
+                    }
+                    if sectionWinery?.caseInsensitiveCompare(header) == .orderedSame {
+                        sectionWinery = nil
+                        sectionWineryEntryIndex = nil
                     }
                     pendingHeader = nil
                 }
@@ -236,7 +241,11 @@ enum MenuScanEngine {
                 }
                 sectionWinery = trimmed
                 sectionWineryEntryIndex = wineNames.count - 1
-                pendingHeader = nil
+                // A menu's fantasy wine name can collide with some winery in the
+                // 60K-winery catalog ("ARTESANO") — keep it as a pending header
+                // too, so a following "VARIETY. WINERY; PLACE" line claims it as
+                // a wine name instead of it leaking winery context downward
+                pendingHeader = trimmed
                 continue
             }
 
@@ -467,8 +476,12 @@ enum MenuScanEngine {
                     // "SOLDESOL, CHARDONNAY, VIÑA AQUITANIA, ..." → "SOLDESOL chardonnay")
                     let sortedVarieties = partVarieties.sorted { $0.count > $1.count }
                     let entryVariety = parts.dropFirst().compactMap { part -> String? in
-                        let lower = part.lowercased()
-                        return sortedVarieties.first { lower == $0 || lower.hasSuffix(" \($0)") || lower.hasPrefix("\($0) ") }
+                        // Menus write blends as "Cabernet Franc/ Malbec" — treat
+                        // slashes as spaces so the grape is still recognized
+                        let lower = " " + part.lowercased()
+                            .replacingOccurrences(of: "/", with: " ")
+                            .replacingOccurrences(of: "  ", with: " ") + " "
+                        return sortedVarieties.first { lower.contains(" \($0) ") }
                     }.first
                     if let entryVariety {
                         if let catalogWine = bestMatch(query: "\(parts[0]) \(entryVariety)") {
@@ -476,15 +489,19 @@ enum MenuScanEngine {
                         }
                     }
 
-                    // Try just the winery name (before the comma) + variety
-                    let wineryQuery = variety != nil ? "\(parts[0]) \(variety!)" : parts[0]
-                    if let catalogWine = bestMatch(query: wineryQuery) {
-                        // When the menu named a grape, a bare-name hit must agree on
-                        // variety — fantasy names otherwise match unrelated wines
-                        // (e.g. "ARTESANO" → a Portuguese Alicante Bouschet)
-                        let matchVariety = catalogWine.variety?.lowercased() ?? ""
-                        if entryVariety == nil || matchVariety.contains(entryVariety!) || entryVariety!.contains(matchVariety) {
-                            return catalogWine
+                    // Bare first-part fallback ONLY for true "Winery, Wine" pairs.
+                    // Header-derived entries (3+ parts) skip it: a fantasy name
+                    // alone matches unrelated wines and wineries ("ARTESANO" →
+                    // Cavas del Artesano), and the precise queries above already
+                    // cover anything actually in the catalog
+                    if parts.count == 2 {
+                        let wineryQuery = variety != nil ? "\(parts[0]) \(variety!)" : parts[0]
+                        if let catalogWine = bestMatch(query: wineryQuery) {
+                            // A bare-name hit must agree on the grape when known
+                            let matchVariety = catalogWine.variety?.lowercased() ?? ""
+                            if entryVariety == nil || matchVariety.contains(entryVariety!) || entryVariety!.contains(matchVariety) {
+                                return catalogWine
+                            }
                         }
                     }
                 }
