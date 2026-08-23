@@ -573,7 +573,7 @@ struct EditWineView: View {
     @State private var showingCountryPicker = false
     @State private var showingWineryPicker = false
 
-    private let wineTypeOptions = ["", "Red", "White", "Rosé", "Sparkling", "Dessert", "Fortified"]
+    private let wineTypeOptions = ["", "Red", "White", "Orange", "Rosé", "Sparkling", "Dessert", "Fortified"]
 
     private var frequentCountries: [String] {
         let values = allRatings.compactMap { $0.wine?.country }

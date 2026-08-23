@@ -34,7 +34,7 @@ struct AddWineView: View {
     @State private var showingCountryPicker = false
     @State private var showingRegionPicker = false
 
-    private let wineTypeOptions = ["Red", "White", "Rosé", "Sparkling", "Dessert", "Fortified"]
+    private let wineTypeOptions = ["Red", "White", "Orange", "Rosé", "Sparkling", "Dessert", "Fortified"]
 
     init(initialName: String = "", initialWinery: String = "", onWineCreated: ((Wine) -> Void)? = nil) {
         self.initialName = initialName
