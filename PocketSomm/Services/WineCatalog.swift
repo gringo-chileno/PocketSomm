@@ -18,7 +18,8 @@ struct CatalogWine: Identifiable, Hashable {
     let foodPairings: String?
 
     var displayName: String {
-        if let vintage = vintage {
+        // Some catalog names already end with the year — don't double it
+        if let vintage = vintage, !name.contains(String(vintage)) {
             return "\(name) \(vintage)"
         }
         return name
